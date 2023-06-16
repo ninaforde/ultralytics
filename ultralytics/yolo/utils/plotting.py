@@ -95,7 +95,7 @@ class Annotator:
         else:  # cv2
             p1, p2 = (int(box[0]), int(box[1])), (int(box[2]), int(box[3]))
             overlay = self.im.copy()
-            alpha = 0.4
+            alpha = 0.4 # Can be config from predict method
             cv2.rectangle(overlay, p1, p2, color, thickness=self.lw, lineType=cv2.LINE_AA)
             if label:
                 tf = max(self.lw - 1, 1)  # font thickness
