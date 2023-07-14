@@ -16,11 +16,7 @@ from ultralytics.yolo.utils import (DEFAULT_CFG, DEFAULT_CFG_DICT, DEFAULT_CFG_P
 # Define valid tasks and modes
 MODES = 'train', 'val', 'predict', 'export', 'track', 'benchmark'
 TASKS = 'detect', 'segment', 'classify', 'pose'
-TASK2DATA = {
-    'detect': 'coco128.yaml',
-    'segment': 'coco128-seg.yaml',
-    'classify': 'imagenet100',
-    'pose': 'coco8-pose.yaml'}
+TASK2DATA = {'detect': 'coco8.yaml', 'segment': 'coco8-seg.yaml', 'classify': 'imagenet100', 'pose': 'coco8-pose.yaml'}
 TASK2MODEL = {
     'detect': 'yolov8n.pt',
     'segment': 'yolov8n-seg.pt',
@@ -175,8 +171,8 @@ def check_cfg_mismatch(base: Dict, custom: Dict, e=None):
     If any mismatched keys are found, the function prints out similar keys from the base list and exits the program.
 
     Args:
-        custom (Dict): a dictionary of custom configuration options
-        base (Dict): a dictionary of base configuration options
+        custom (dict): a dictionary of custom configuration options
+        base (dict): a dictionary of base configuration options
     """
     custom = _handle_deprecation(custom)
     base, custom = (set(x.keys()) for x in (base, custom))

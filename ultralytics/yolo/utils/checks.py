@@ -20,9 +20,9 @@ import requests
 import torch
 from matplotlib import font_manager
 
-from ultralytics.yolo.utils import (AUTOINSTALL, LOGGER, ONLINE, ROOT, USER_CONFIG_DIR, TryExcept, clean_url, colorstr,
-                                    downloads, emojis, is_colab, is_docker, is_jupyter, is_kaggle, is_online,
-                                    is_pip_package, url2file)
+from ultralytics.yolo.utils import (AUTOINSTALL, LOGGER, ONLINE, ROOT, USER_CONFIG_DIR, ThreadingLocked, TryExcept,
+                                    clean_url, colorstr, downloads, emojis, is_colab, is_docker, is_jupyter, is_kaggle,
+                                    is_online, is_pip_package, url2file)
 
 
 def is_ascii(s) -> bool:
@@ -155,6 +155,7 @@ def check_pip_update_available():
     return False
 
 
+@ThreadingLocked()
 def check_font(font='Arial.ttf'):
     """
     Find font locally or download to user's configuration directory if it does not already exist.
@@ -211,6 +212,7 @@ def check_requirements(requirements=ROOT.parent / 'requirements.txt', exclude=()
     """
     prefix = colorstr('red', 'bold', 'requirements:')
     check_python()  # check python version
+    check_torchvision()  # check torch-torchvision compatibility
     file = None
     if isinstance(requirements, Path):  # requirements.txt file
         file = requirements.resolve()
@@ -221,7 +223,7 @@ def check_requirements(requirements=ROOT.parent / 'requirements.txt', exclude=()
         requirements = [requirements]
 
     s = ''  # console string
-    n = 0  # number of packages updates
+    pkgs = []
     for r in requirements:
         rmin = r.split('/')[-1].replace('.git', '')  # replace git+https://org/repo.git -> 'repo'
         try:
@@ -232,11 +234,11 @@ def check_requirements(requirements=ROOT.parent / 'requirements.txt', exclude=()
                 importlib.import_module(next(pkg.parse_requirements(rmin)).name)
             except ImportError:
                 s += f'"{r}" '
-                n += 1
+                pkgs.append(r)
 
     if s:
         if install and AUTOINSTALL:  # check environment variable
-            pkgs = file or requirements  # missing packages
+            n = len(pkgs)  # number of packages updates
             LOGGER.info(f"{prefix} Ultralytics requirement{'s' * (n > 1)} {pkgs} not found, attempting AutoUpdate...")
             try:
                 t = time.time()
@@ -253,6 +255,34 @@ def check_requirements(requirements=ROOT.parent / 'requirements.txt', exclude=()
             return False
 
     return True
+
+
+def check_torchvision():
+    """
+    Checks the installed versions of PyTorch and Torchvision to ensure they're compatible.
+
+    This function checks the installed versions of PyTorch and Torchvision, and warns if they're incompatible according
+    to the provided compatibility table based on https://github.com/pytorch/vision#installation. The
+    compatibility table is a dictionary where the keys are PyTorch versions and the values are lists of compatible
+    Torchvision versions.
+    """
+
+    import torchvision
+
+    # Compatibility table
+    compatibility_table = {'2.0': ['0.15'], '1.13': ['0.14'], '1.12': ['0.13']}
+
+    # Extract only the major and minor versions
+    v_torch = '.'.join(torch.__version__.split('+')[0].split('.')[:2])
+    v_torchvision = '.'.join(torchvision.__version__.split('+')[0].split('.')[:2])
+
+    if v_torch in compatibility_table:
+        compatible_versions = compatibility_table[v_torch]
+        if all(pkg.parse_version(v_torchvision) != pkg.parse_version(v) for v in compatible_versions):
+            print(f'WARNING ⚠️ torchvision=={v_torchvision} is incompatible with torch=={v_torch}.\n'
+                  f"Run 'pip install torchvision=={compatible_versions[0]}' to fix torchvision or "
+                  "'pip install -U torch torchvision' to update both.\n"
+                  'For a full compatibility table see https://github.com/pytorch/vision#installation')
 
 
 def check_suffix(file='yolov8n.pt', suffix='.pt', msg=''):
@@ -402,7 +432,7 @@ def check_amp(model):
 
 
 def git_describe(path=ROOT):  # path must be a directory
-    # Return human-readable git description, i.e. v5.0-5-g3e25f1e https://git-scm.com/docs/git-describe
+    """Return human-readable git description, i.e. v5.0-5-g3e25f1e https://git-scm.com/docs/git-describe."""
     try:
         assert (Path(path) / '.git').is_dir()
         return subprocess.check_output(f'git -C {path} describe --tags --long --always', shell=True).decode()[:-1]
