@@ -21,7 +21,7 @@ The COCO dataset is split into three subsets:
 
 1. **Train2017**: This subset contains 118K images for training object detection, segmentation, and captioning models.
 2. **Val2017**: This subset has 5K images used for validation purposes during model training.
-3. **Test2017**: This subset consists of 20K images used for testing and benchmarking the trained models. Ground truth annotations for this subset are not publicly available, and the results are submitted to the [COCO evaluation server](https://competitions.codalab.org/competitions/5181) for performance evaluation.
+3. **Test2017**: This subset consists of 20K images used for testing and benchmarking the trained models. Ground truth annotations for this subset are not publicly available, and the results are submitted to the [COCO evaluation server](https://codalab.lisn.upsaclay.fr/competitions/7384) for performance evaluation.
 
 ## Applications
 
@@ -47,10 +47,10 @@ To train a YOLOv8n model on the COCO dataset for 100 epochs with an image size o
 
         ```python
         from ultralytics import YOLO
-        
+
         # Load a model
         model = YOLO('yolov8n.pt')  # load a pretrained model (recommended for training)
-        
+
         # Train the model
         model.train(data='coco.yaml', epochs=100, imgsz=640)
         ```
@@ -78,7 +78,7 @@ If you use the COCO dataset in your research or development work, please cite th
 
 ```bibtex
 @misc{lin2015microsoft,
-      title={Microsoft COCO: Common Objects in Context}, 
+      title={Microsoft COCO: Common Objects in Context},
       author={Tsung-Yi Lin and Michael Maire and Serge Belongie and Lubomir Bourdev and Ross Girshick and James Hays and Pietro Perona and Deva Ramanan and C. Lawrence Zitnick and Piotr Dollár},
       year={2015},
       eprint={1405.0312},

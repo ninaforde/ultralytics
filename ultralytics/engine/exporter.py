@@ -19,7 +19,7 @@ PaddlePaddle            | `paddle`                  | yolov8n_paddle_model/
 ncnn                    | `ncnn`                    | yolov8n_ncnn_model/
 
 Requirements:
-    $ pip install ultralytics[export]
+    $ pip install "ultralytics[export]"
 
 Python:
     from ultralytics import YOLO
@@ -32,7 +32,7 @@ CLI:
 Inference:
     $ yolo predict model=yolov8n.pt                 # PyTorch
                          yolov8n.torchscript        # TorchScript
-                         yolov8n.onnx               # ONNX Runtime or OpenCV DNN with --dnn
+                         yolov8n.onnx               # ONNX Runtime or OpenCV DNN with dnn=True
                          yolov8n_openvino_model     # OpenVINO
                          yolov8n.engine             # TensorRT
                          yolov8n.mlmodel            # CoreML (macOS-only)
@@ -116,7 +116,7 @@ def try_export(inner_func):
             return f, model
         except Exception as e:
             LOGGER.info(f'{prefix} export failure ❌ {dt.t:.1f}s: {e}')
-            return None, None
+            raise e
 
     return outer_func
 
@@ -177,7 +177,7 @@ class Exporter:
         im = torch.zeros(self.args.batch, 3, *self.imgsz).to(self.device)
         file = Path(
             getattr(model, 'pt_path', None) or getattr(model, 'yaml_file', None) or model.yaml.get('yaml_file', ''))
-        if file.suffix == '.yaml':
+        if file.suffix in ('.yaml', '.yml'):
             file = Path(file.name)
 
         # Update model
@@ -422,7 +422,7 @@ class Exporter:
                 f'{prefix} WARNING ⚠️ PNNX not found. Attempting to download binary file from '
                 'https://github.com/pnnx/pnnx/.\nNote PNNX Binary file must be placed in current working directory '
                 f'or in {ROOT}. See PNNX repo for full installation instructions.')
-            _, assets = get_github_assets(repo='pnnx/pnnx')
+            _, assets = get_github_assets(repo='pnnx/pnnx', retry=True)
             asset = [x for x in assets if ('macos' if MACOS else 'ubuntu' if LINUX else 'windows') in x][0]
             attempt_download_asset(asset, repo='pnnx/pnnx', release='latest')
             unzip_dir = Path(asset).with_suffix('')
@@ -432,16 +432,24 @@ class Exporter:
             Path(asset).unlink()  # delete zip
             pnnx.chmod(0o777)  # set read, write, and execute permissions for everyone
 
-        cmd = [
-            str(pnnx),
-            str(f_ts),
+        use_ncnn = True
+        ncnn_args = [
+            f'ncnnparam={f / "model.ncnn.param"}',
+            f'ncnnbin={f / "model.ncnn.bin"}',
+            f'ncnnpy={f / "model_ncnn.py"}', ] if use_ncnn else []
+
+        use_pnnx = False
+        pnnx_args = [
             f'pnnxparam={f / "model.pnnx.param"}',
             f'pnnxbin={f / "model.pnnx.bin"}',
             f'pnnxpy={f / "model_pnnx.py"}',
-            f'pnnxonnx={f / "model.pnnx.onnx"}',
-            f'ncnnparam={f / "model.ncnn.param"}',
-            f'ncnnbin={f / "model.ncnn.bin"}',
-            f'ncnnpy={f / "model_ncnn.py"}',
+            f'pnnxonnx={f / "model.pnnx.onnx"}', ] if use_pnnx else []
+
+        cmd = [
+            str(pnnx),
+            str(f_ts),
+            *ncnn_args,
+            *pnnx_args,
             f'fp16={int(self.args.half)}',
             f'device={self.device.type}',
             f'inputshape="{[self.args.batch, 3, *self.imgsz]}"', ]
@@ -457,7 +465,7 @@ class Exporter:
     @try_export
     def export_coreml(self, prefix=colorstr('CoreML:')):
         """YOLOv8 CoreML export."""
-        check_requirements('coremltools>=6.0')
+        check_requirements('coremltools>=6.0,<=6.2')
         import coremltools as ct  # noqa
 
         LOGGER.info(f'\n{prefix} starting export with coremltools {ct.__version__}...')
@@ -570,7 +578,7 @@ class Exporter:
             cuda = torch.cuda.is_available()
             check_requirements(f"tensorflow{'-macos' if MACOS else '-aarch64' if ARM64 else '' if cuda else '-cpu'}")
             import tensorflow as tf  # noqa
-        check_requirements(('onnx', 'onnx2tf>=1.7.7', 'sng4onnx>=1.0.1', 'onnxsim>=0.4.17', 'onnx_graphsurgeon>=0.3.26',
+        check_requirements(('onnx', 'onnx2tf>=1.9.1', 'sng4onnx>=1.0.1', 'onnxsim>=0.4.17', 'onnx_graphsurgeon>=0.3.26',
                             'tflite_support', 'onnxruntime-gpu' if torch.cuda.is_available() else 'onnxruntime'),
                            cmds='--extra-index-url https://pypi.ngc.nvidia.com')
 
@@ -585,14 +593,43 @@ class Exporter:
         f_onnx, _ = self.export_onnx()
 
         # Export to TF
-        int8 = '-oiqt -qt per-tensor' if self.args.int8 else ''
-        cmd = f'onnx2tf -i "{f_onnx}" -o "{f}" -nuo --non_verbose {int8}'
-        LOGGER.info(f"\n{prefix} running '{cmd}'")
+        tmp_file = f / 'tmp_tflite_int8_calibration_images.npy'  # int8 calibration images file
+        if self.args.int8:
+            if self.args.data:
+                import numpy as np
+
+                from ultralytics.data.dataset import YOLODataset
+                from ultralytics.data.utils import check_det_dataset
+
+                # Generate calibration data for integer quantization
+                LOGGER.info(f"{prefix} collecting INT8 calibration images from 'data={self.args.data}'")
+                dataset = YOLODataset(check_det_dataset(self.args.data)['val'], imgsz=self.imgsz[0], augment=False)
+                images = []
+                n_images = 100  # maximum number of images
+                for n, batch in enumerate(dataset):
+                    if n >= n_images:
+                        break
+                    im = batch['img'].permute(1, 2, 0)[None]  # list to nparray, CHW to BHWC,
+                    images.append(im)
+                f.mkdir()
+                images = torch.cat(images, 0).float()
+                # mean = images.view(-1, 3).mean(0)  # imagenet mean [123.675, 116.28, 103.53]
+                # std = images.view(-1, 3).std(0)  # imagenet std [58.395, 57.12, 57.375]
+                np.save(str(tmp_file), images.numpy())  # BHWC
+                int8 = f'-oiqt -qt per-tensor -cind images "{tmp_file}" "[[[[0, 0, 0]]]]" "[[[[255, 255, 255]]]]"'
+            else:
+                int8 = '-oiqt -qt per-tensor'
+        else:
+            int8 = ''
+
+        cmd = f'onnx2tf -i "{f_onnx}" -o "{f}" -nuo --non_verbose {int8}'.strip()
+        LOGGER.info(f"{prefix} running '{cmd}'")
         subprocess.run(cmd, shell=True)
         yaml_save(f / 'metadata.yaml', self.metadata)  # add metadata.yaml
 
         # Remove/rename TFLite models
         if self.args.int8:
+            tmp_file.unlink(missing_ok=True)
             for file in f.rglob('*_dynamic_range_quant.tflite'):
                 file.rename(file.with_name(file.stem.replace('_dynamic_range_quant', '_int8') + file.suffix))
             for file in f.rglob('*_integer_quant_with_int16_act.tflite'):

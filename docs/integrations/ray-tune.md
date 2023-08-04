@@ -29,8 +29,8 @@ To install the required packages, run:
 !!! tip "Installation"
 
     ```bash
-    # Install and update Ultralytics and Ray Tune pacakges
-    pip install -U ultralytics 'ray[tune]'
+    # Install and update Ultralytics and Ray Tune packages
+    pip install -U ultralytics "ray[tune]"
 
     # Optionally install W&B for logging
     pip install wandb
@@ -99,7 +99,7 @@ In this example, we demonstrate how to use a custom search space for hyperparame
     ```python
     from ultralytics import YOLO
 
-    # Define a YOLO model    
+    # Define a YOLO model
     model = YOLO("yolov8n.pt")
 
     # Run Ray Tune on the model
