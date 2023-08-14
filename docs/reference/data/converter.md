@@ -7,7 +7,7 @@ keywords: Ultralytics, Data Converter, coco91_to_coco80_class, merge_multi_segme
 
 !!! note
 
-    Full source code for this file is available at [https://github.com/ultralytics/ultralytics/blob/main/ultralytics/data/converter.py](https://github.com/ultralytics/ultralytics/blob/main/ultralytics/data/converter.py).
+    Full source code for this file is available at [https://github.com/ultralytics/ultralytics/blob/main/ultralytics/data/converter.py](https://github.com/ultralytics/ultralytics/blob/main/ultralytics/data/converter.py). Help us fix any issues you see by submitting a [Pull Request](https://docs.ultralytics.com/help/contributing/) 🛠️. Thank you 🙏!
 
 ---
 ## ::: ultralytics.data.converter.coco91_to_coco80_class
@@ -15,6 +15,10 @@ keywords: Ultralytics, Data Converter, coco91_to_coco80_class, merge_multi_segme
 
 ---
 ## ::: ultralytics.data.converter.convert_coco
+<br><br>
+
+---
+## ::: ultralytics.data.converter.convert_dota_to_yolo_obb
 <br><br>
 
 ---
@@ -27,8 +31,4 @@ keywords: Ultralytics, Data Converter, coco91_to_coco80_class, merge_multi_segme
 
 ---
 ## ::: ultralytics.data.converter.merge_multi_segment
-<br><br>
-
----
-## ::: ultralytics.data.converter.delete_dsstore
 <br><br>
