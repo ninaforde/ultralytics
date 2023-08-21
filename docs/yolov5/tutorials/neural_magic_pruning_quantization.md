@@ -67,7 +67,7 @@ We will walk through an example benchmarking and deploying a sparse version of Y
 Run the following to install DeepSparse. We recommend you use a virtual environment with Python.
 
 ```bash
-pip install deepsparse[server,yolo,onnxruntime]
+pip install "deepsparse[server,yolo,onnxruntime]"
 ```
 
 ### Collect an ONNX File
@@ -145,7 +145,7 @@ An example request, using Python's `requests` package:
 import requests, json
 
 # list of images for inference (local files on client side)
-path = ['basilica.jpg'] 
+path = ['basilica.jpg']
 files = [('request', open(img, 'rb')) for img in path]
 
 # send request over HTTP to /predict/from_files endpoint

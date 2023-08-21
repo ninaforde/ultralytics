@@ -15,7 +15,6 @@ RUN apt update \
 # RUN alias python=python3
 
 # Create working directory
-RUN mkdir -p /usr/src/ultralytics
 WORKDIR /usr/src/ultralytics
 
 # Copy contents
@@ -40,5 +39,8 @@ ENV OMP_NUM_THREADS=1
 # Build and Push
 # t=ultralytics/ultralytics:latest-jetson && sudo docker build --platform linux/arm64 -f docker/Dockerfile-jetson -t $t . && sudo docker push $t
 
-# Pull and Run
-# t=ultralytics/ultralytics:jetson && sudo docker pull $t && sudo docker run -it --runtime=nvidia $t
+# Run
+# t=ultralytics/ultralytics:latest-jetson && sudo docker run -it --ipc=host $t
+
+# Pull and Run with NVIDIA runtime
+# t=ultralytics/ultralytics:latest-jetson && sudo docker pull $t && sudo docker run -it --ipc=host --runtime=nvidia $t

@@ -20,7 +20,7 @@ Usage - formats:
                               yolov8n.onnx               # ONNX Runtime or OpenCV DNN with dnn=True
                               yolov8n_openvino_model     # OpenVINO
                               yolov8n.engine             # TensorRT
-                              yolov8n.mlmodel            # CoreML (macOS-only)
+                              yolov8n.mlpackage          # CoreML (macOS-only)
                               yolov8n_saved_model        # TensorFlow SavedModel
                               yolov8n.pb                 # TensorFlow GraphDef
                               yolov8n.tflite             # TensorFlow Lite
@@ -47,7 +47,7 @@ STREAM_WARNING = """
     WARNING ⚠️ stream/video/webcam/dir predict source will accumulate results in RAM unless `stream=True` is passed,
     causing potential out-of-memory errors for large sources or long-running streams/videos.
 
-    Usage:
+    Example:
         results = model(source=..., stream=True)  # generator of Results objects
         for r in results:
             boxes = r.boxes  # Boxes object for bbox outputs
@@ -105,6 +105,7 @@ class BasePredictor:
         self.results = None
         self.transforms = None
         self.callbacks = _callbacks or callbacks.get_default_callbacks()
+        self.txt_path = None
         callbacks.add_integration_callbacks(self)
 
     def get_save_dir(self):
@@ -137,12 +138,14 @@ class BasePredictor:
         return self.model(im, augment=self.args.augment, visualize=visualize)
 
     def pre_transform(self, im):
-        """Pre-transform input image before inference.
+        """
+        Pre-transform input image before inference.
 
         Args:
             im (List(np.ndarray)): (N, 3, h, w) for tensor, [(h, w, 3) x N] for list.
 
-        Return: A list of transformed imgs.
+        Returns:
+            (list): A list of transformed images.
         """
         same_shapes = all(x.shape == im[0].shape for x in im)
         auto = same_shapes and self.model.pt
@@ -178,7 +181,8 @@ class BasePredictor:
         if self.args.save_txt:
             result.save_txt(f'{self.txt_path}.txt', save_conf=self.args.save_conf)
         if self.args.save_crop:
-            result.save_crop(save_dir=self.save_dir / 'crops', file_name=self.data_path.stem)
+            result.save_crop(save_dir=self.save_dir / 'crops',
+                             file_name=self.data_path.stem + ('' if self.dataset.mode == 'image' else f'_{frame}'))
 
         return log_string
 

@@ -26,11 +26,11 @@ from ultralytics import __version__
 # PyTorch Multi-GPU DDP Constants
 RANK = int(os.getenv('RANK', -1))
 LOCAL_RANK = int(os.getenv('LOCAL_RANK', -1))  # https://pytorch.org/docs/stable/elastic/run.html
-WORLD_SIZE = int(os.getenv('WORLD_SIZE', 1))
 
 # Other Constants
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[1]  # YOLO
+ASSETS = ROOT / 'assets'  # default images
 DEFAULT_CFG_PATH = ROOT / 'cfg/default.yaml'
 NUM_THREADS = min(8, max(1, os.cpu_count() - 1))  # number of YOLOv5 multiprocessing threads
 AUTOINSTALL = str(os.getenv('YOLO_AUTOINSTALL', True)).lower() == 'true'  # global auto-install mode
@@ -169,7 +169,7 @@ def plt_settings(rcparams=None, backend='Agg'):
     """
     Decorator to temporarily set rc parameters and the backend for a plotting function.
 
-    Usage:
+    Example:
         decorator: @plt_settings({"font.size": 12})
         context manager: with plt_settings({"font.size": 12}):
 
@@ -261,11 +261,15 @@ class ThreadingLocked:
     Attributes:
         lock (threading.Lock): A lock object used to manage access to the decorated function.
 
-    Usage:
+    Example:
+        ```python
+        from ultralytics.utils import ThreadingLocked
+
         @ThreadingLocked()
         def my_function():
             # Your code here
             pass
+        ```
     """
 
     def __init__(self):
@@ -329,7 +333,10 @@ def yaml_load(file='data.yaml', append_filename=False):
             s = re.sub(r'[^\x09\x0A\x0D\x20-\x7E\x85\xA0-\uD7FF\uE000-\uFFFD\U00010000-\U0010ffff]+', '', s)
 
         # Add YAML filename to dict and return
-        return {**yaml.safe_load(s), 'yaml_file': str(file)} if append_filename else yaml.safe_load(s)
+        data = yaml.safe_load(s) or {}  # always return a dict (yaml.safe_load() may return None for empty files)
+        if append_filename:
+            data['yaml_file'] = str(file)
+        return data
 
 
 def yaml_print(yaml_file: Union[str, Path, dict]) -> None:
@@ -354,6 +361,19 @@ for k, v in DEFAULT_CFG_DICT.items():
         DEFAULT_CFG_DICT[k] = None
 DEFAULT_CFG_KEYS = DEFAULT_CFG_DICT.keys()
 DEFAULT_CFG = IterableSimpleNamespace(**DEFAULT_CFG_DICT)
+
+
+def is_ubuntu() -> bool:
+    """
+    Check if the OS is Ubuntu.
+
+    Returns:
+        (bool): True if OS is Ubuntu, False otherwise.
+    """
+    with contextlib.suppress(FileNotFoundError):
+        with open('/etc/os-release') as f:
+            return 'ID=ubuntu' in f.read()
+    return False
 
 
 def is_colab():
@@ -503,7 +523,6 @@ def get_git_dir():
     for d in Path(__file__).parents:
         if (d / '.git').is_dir():
             return d
-    return None  # no .git dir found
 
 
 def get_git_origin_url():
@@ -511,13 +530,12 @@ def get_git_origin_url():
     Retrieves the origin URL of a git repository.
 
     Returns:
-        (str | None): The origin URL of the git repository.
+        (str | None): The origin URL of the git repository or None if not git directory.
     """
     if is_git_dir():
         with contextlib.suppress(subprocess.CalledProcessError):
             origin = subprocess.check_output(['git', 'config', '--get', 'remote.origin.url'])
             return origin.decode().strip()
-    return None  # if not git dir or on error
 
 
 def get_git_branch():
@@ -525,13 +543,12 @@ def get_git_branch():
     Returns the current git branch name. If not in a git repository, returns None.
 
     Returns:
-        (str | None): The current git branch name.
+        (str | None): The current git branch name or None if not a git directory.
     """
     if is_git_dir():
         with contextlib.suppress(subprocess.CalledProcessError):
             origin = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD'])
             return origin.decode().strip()
-    return None  # if not git dir or on error
 
 
 def get_default_args(func):
@@ -545,6 +562,19 @@ def get_default_args(func):
     """
     signature = inspect.signature(func)
     return {k: v.default for k, v in signature.parameters.items() if v.default is not inspect.Parameter.empty}
+
+
+def get_ubuntu_version():
+    """
+    Retrieve the Ubuntu version if the OS is Ubuntu.
+
+    Returns:
+        (str): Ubuntu version or None if not an Ubuntu OS.
+    """
+    if is_ubuntu():
+        with contextlib.suppress(FileNotFoundError, AttributeError):
+            with open('/etc/os-release') as f:
+                return re.search(r'VERSION_ID="(\d+\.\d+)"', f.read())[1]
 
 
 def get_user_config_dir(sub_dir='Ultralytics'):
@@ -568,9 +598,10 @@ def get_user_config_dir(sub_dir='Ultralytics'):
         raise ValueError(f'Unsupported operating system: {platform.system()}')
 
     # GCP and AWS lambda fix, only /tmp is writeable
-    if not is_dir_writeable(str(path.parent)):
-        path = Path('/tmp') / sub_dir
-        LOGGER.warning(f"WARNING ⚠️ user config directory is not writeable, defaulting to '{path}'.")
+    if not is_dir_writeable(path.parent):
+        LOGGER.warning(f"WARNING ⚠️ user config directory '{path}' is not writeable, defaulting to '/tmp' or CWD."
+                       'Alternatively you can define a YOLO_CONFIG_DIR environment variable for this path.')
+        path = Path('/tmp') / sub_dir if is_dir_writeable('/tmp') else Path().cwd() / sub_dir
 
     # Create the subdirectory if it does not exist
     path.mkdir(parents=True, exist_ok=True)
@@ -578,7 +609,7 @@ def get_user_config_dir(sub_dir='Ultralytics'):
     return path
 
 
-USER_CONFIG_DIR = Path(os.getenv('YOLO_CONFIG_DIR', get_user_config_dir()))  # Ultralytics settings dir
+USER_CONFIG_DIR = Path(os.getenv('YOLO_CONFIG_DIR') or get_user_config_dir())  # Ultralytics settings dir
 SETTINGS_YAML = USER_CONFIG_DIR / 'settings.yaml'
 
 
@@ -713,62 +744,82 @@ def set_sentry():
             logging.getLogger(logger).setLevel(logging.CRITICAL)
 
 
-def get_settings(file=SETTINGS_YAML, version='0.0.3'):
+class SettingsManager(dict):
     """
-    Loads a global Ultralytics settings YAML file or creates one with default values if it does not exist.
+    Manages Ultralytics settings stored in a YAML file.
 
     Args:
-        file (Path): Path to the Ultralytics settings YAML file. Defaults to 'settings.yaml' in the USER_CONFIG_DIR.
-        version (str): Settings version. If min settings version not met, new default settings will be saved.
-
-    Returns:
-        (dict): Dictionary of settings key-value pairs.
+        file (str | Path): Path to the Ultralytics settings YAML file. Default is USER_CONFIG_DIR / 'settings.yaml'.
+        version (str): Settings version. In case of local version mismatch, new default settings will be saved.
     """
-    import hashlib
 
-    from ultralytics.utils.checks import check_version
-    from ultralytics.utils.torch_utils import torch_distributed_zero_first
+    def __init__(self, file=SETTINGS_YAML, version='0.0.4'):
+        import copy
+        import hashlib
 
-    git_dir = get_git_dir()
-    root = git_dir or Path()
-    datasets_root = (root.parent if git_dir and is_dir_writeable(root.parent) else root).resolve()
-    defaults = {
-        'datasets_dir': str(datasets_root / 'datasets'),  # default datasets directory.
-        'weights_dir': str(root / 'weights'),  # default weights directory.
-        'runs_dir': str(root / 'runs'),  # default runs directory.
-        'uuid': hashlib.sha256(str(uuid.getnode()).encode()).hexdigest(),  # SHA-256 anonymized UUID hash
-        'sync': True,  # sync analytics to help with YOLO development
-        'api_key': '',  # Ultralytics HUB API key (https://hub.ultralytics.com/)
-        'settings_version': version}  # Ultralytics settings version
+        from ultralytics.utils.checks import check_version
+        from ultralytics.utils.torch_utils import torch_distributed_zero_first
 
-    with torch_distributed_zero_first(RANK):
-        if not file.exists():
-            yaml_save(file, defaults)
-        settings = yaml_load(file)
+        git_dir = get_git_dir()
+        root = git_dir or Path()
+        datasets_root = (root.parent if git_dir and is_dir_writeable(root.parent) else root).resolve()
 
-        # Check that settings keys and types match defaults
-        correct = \
-            settings \
-            and settings.keys() == defaults.keys() \
-            and all(type(a) == type(b) for a, b in zip(settings.values(), defaults.values())) \
-            and check_version(settings['settings_version'], version)
-        if not correct:
-            LOGGER.warning('WARNING ⚠️ Ultralytics settings reset to defaults. This is normal and may be due to a '
-                           'recent ultralytics package update, but may have overwritten previous settings. '
-                           f"\nView and update settings with 'yolo settings' or at '{file}'")
-            settings = defaults  # merge **defaults with **settings (prefer **settings)
-            yaml_save(file, settings)  # save updated defaults
+        self.file = Path(file)
+        self.version = version
+        self.defaults = {
+            'settings_version': version,
+            'datasets_dir': str(datasets_root / 'datasets'),
+            'weights_dir': str(root / 'weights'),
+            'runs_dir': str(root / 'runs'),
+            'uuid': hashlib.sha256(str(uuid.getnode()).encode()).hexdigest(),
+            'sync': True,
+            'api_key': '',
+            'clearml': True,  # integrations
+            'comet': True,
+            'dvc': True,
+            'hub': True,
+            'mlflow': True,
+            'neptune': True,
+            'raytune': True,
+            'tensorboard': True,
+            'wandb': True}
 
-        return settings
+        super().__init__(copy.deepcopy(self.defaults))
 
+        with torch_distributed_zero_first(RANK):
+            if not self.file.exists():
+                self.save()
 
-def set_settings(kwargs, file=SETTINGS_YAML):
-    """
-    Function that runs on a first-time ultralytics package installation to set up global settings and create necessary
-    directories.
-    """
-    SETTINGS.update(kwargs)
-    yaml_save(file, SETTINGS)
+            self.load()
+            correct_keys = self.keys() == self.defaults.keys()
+            correct_types = all(type(a) is type(b) for a, b in zip(self.values(), self.defaults.values()))
+            correct_version = check_version(self['settings_version'], self.version)
+            if not (correct_keys and correct_types and correct_version):
+                LOGGER.warning(
+                    'WARNING ⚠️ Ultralytics settings reset to default values. This may be due to a possible problem '
+                    'with your settings or a recent ultralytics package update. '
+                    f"\nView settings with 'yolo settings' or at '{self.file}'"
+                    "\nUpdate settings with 'yolo settings key=value', i.e. 'yolo settings runs_dir=path/to/dir'.")
+                self.reset()
+
+    def load(self):
+        """Loads settings from the YAML file."""
+        super().update(yaml_load(self.file))
+
+    def save(self):
+        """Saves the current settings to the YAML file."""
+        yaml_save(self.file, dict(self))
+
+    def update(self, *args, **kwargs):
+        """Updates a setting value in the current settings."""
+        super().update(*args, **kwargs)
+        self.save()
+
+    def reset(self):
+        """Resets the settings to default and saves them."""
+        self.clear()
+        self.update(self.defaults)
+        self.save()
 
 
 def deprecation_warn(arg, new_arg, version=None):
@@ -781,7 +832,7 @@ def deprecation_warn(arg, new_arg, version=None):
 
 def clean_url(url):
     """Strip auth from URL, i.e. https://url.com/file.txt?auth -> https://url.com/file.txt."""
-    url = str(Path(url)).replace(':/', '://')  # Pathlib turns :// -> :/
+    url = Path(url).as_posix().replace(':/', '://')  # Pathlib turns :// -> :/, as_posix() for Windows
     return urllib.parse.unquote(url).split('?')[0]  # '%2F' to '/', split https://url.com/file.txt?auth
 
 
@@ -794,7 +845,7 @@ def url2file(url):
 
 # Check first-install steps
 PREFIX = colorstr('Ultralytics: ')
-SETTINGS = get_settings()
+SETTINGS = SettingsManager()  # initialize settings
 DATASETS_DIR = Path(SETTINGS['datasets_dir'])  # global datasets directory
 ENVIRONMENT = 'Colab' if is_colab() else 'Kaggle' if is_kaggle() else 'Jupyter' if is_jupyter() else \
     'Docker' if is_docker() else platform.system()

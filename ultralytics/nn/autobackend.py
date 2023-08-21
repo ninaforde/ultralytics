@@ -3,7 +3,6 @@
 import ast
 import contextlib
 import json
-import os
 import platform
 import zipfile
 from collections import OrderedDict, namedtuple
@@ -69,7 +68,7 @@ class AutoBackend(nn.Module):
             | ONNX Runtime          | *.onnx           |
             | ONNX OpenCV DNN       | *.onnx dnn=True  |
             | OpenVINO              | *.xml            |
-            | CoreML                | *.mlmodel        |
+            | CoreML                | *.mlpackage      |
             | TensorRT              | *.engine         |
             | TensorFlow SavedModel | *_saved_model    |
             | TensorFlow GraphDef   | *.pb             |
@@ -264,10 +263,9 @@ class AutoBackend(nn.Module):
             metadata = w.parents[1] / 'metadata.yaml'
         elif ncnn:  # ncnn
             LOGGER.info(f'Loading {w} for ncnn inference...')
-            check_requirements('git+https://github.com/Tencent/ncnn.git' if ARM64 else 'ncnn')  # requires NCNN
+            check_requirements('git+https://github.com/Tencent/ncnn.git' if ARM64 else 'ncnn')  # requires ncnn
             import ncnn as pyncnn
             net = pyncnn.Net()
-            net.opt.num_threads = os.cpu_count()
             net.opt.use_vulkan_compute = cuda
             w = Path(w)
             if not w.is_file():  # if not *.param
@@ -402,19 +400,24 @@ class AutoBackend(nn.Module):
                     nc = y[ib].shape[1] - y[ip].shape[3] - 4  # y = (1, 160, 160, 32), (1, 116, 8400)
                     self.names = {i: f'class{i}' for i in range(nc)}
             else:  # Lite or Edge TPU
-                input = self.input_details[0]
-                int8 = input['dtype'] == np.int8  # is TFLite quantized int8 model
-                if int8:
-                    scale, zero_point = input['quantization']
-                    im = (im / scale + zero_point).astype(np.int8)  # de-scale
-                self.interpreter.set_tensor(input['index'], im)
+                details = self.input_details[0]
+                integer = details['dtype'] in (np.int8, np.int16)  # is TFLite quantized int8 or int16 model
+                if integer:
+                    scale, zero_point = details['quantization']
+                    im = (im / scale + zero_point).astype(details['dtype'])  # de-scale
+                self.interpreter.set_tensor(details['index'], im)
                 self.interpreter.invoke()
                 y = []
                 for output in self.output_details:
                     x = self.interpreter.get_tensor(output['index'])
-                    if int8:
+                    if integer:
                         scale, zero_point = output['quantization']
                         x = (x.astype(np.float32) - zero_point) * scale  # re-scale
+                    if x.ndim > 2:  # if task is not classification
+                        # Denormalize xywh by image size. See https://github.com/ultralytics/ultralytics/pull/1695
+                        # xywh are normalized in TFLite/EdgeTPU to mitigate quantization error of integer models
+                        x[:, [0, 2]] *= w
+                        x[:, [1, 3]] *= h
                     y.append(x)
             # TF segment fixes: export is reversed vs ONNX export and protos are transposed
             if len(y) == 2:  # segment with (det, proto) output order reversed
@@ -422,7 +425,6 @@ class AutoBackend(nn.Module):
                     y = list(reversed(y))  # should be y = (1, 116, 8400), (1, 160, 160, 32)
                 y[1] = np.transpose(y[1], (0, 3, 1, 2))  # should be y = (1, 116, 8400), (1, 32, 160, 160)
             y = [x if isinstance(x, np.ndarray) else x.numpy() for x in y]
-            # y[0][..., :4] *= [w, h, w, h]  # xywh normalized to pixels
 
         # for x in y:
         #     print(type(x), len(x)) if isinstance(x, (list, tuple)) else print(type(x), x.shape)  # debug shapes
@@ -480,8 +482,13 @@ class AutoBackend(nn.Module):
         sf = list(export_formats().Suffix)  # export suffixes
         if not is_url(p, check=False) and not isinstance(p, str):
             check_suffix(p, sf)  # checks
-        url = urlparse(p)  # if url may be Triton inference server
-        types = [s in Path(p).name for s in sf]
+        name = Path(p).name
+        types = [s in name for s in sf]
+        types[5] |= name.endswith('.mlmodel')  # retain support for older Apple CoreML *.mlmodel formats
         types[8] &= not types[9]  # tflite &= not edgetpu
-        triton = not any(types) and all([any(s in url.scheme for s in ['http', 'grpc']), url.netloc])
+        if any(types):
+            triton = False
+        else:
+            url = urlparse(p)  # if url may be Triton inference server
+            triton = all([any(s in url.scheme for s in ['http', 'grpc']), url.netloc])
         return types + [triton]

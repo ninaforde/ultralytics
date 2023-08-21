@@ -35,12 +35,12 @@ To train a model on the ImageNette dataset for 100 epochs with a standard image 
 
         ```python
         from ultralytics import YOLO
-        
+
         # Load a model
         model = YOLO('yolov8n-cls.pt')  # load a pretrained model (recommended for training)
-        
+
         # Train the model
-        model.train(data='imagenette', epochs=100, imgsz=224)
+        results = model.train(data='imagenette', epochs=100, imgsz=224)
         ```
 
     === "CLI"
@@ -70,12 +70,12 @@ To use these datasets, simply replace 'imagenette' with 'imagenette160' or 'imag
 
         ```python
         from ultralytics import YOLO
-        
+
         # Load a model
         model = YOLO('yolov8n-cls.pt')  # load a pretrained model (recommended for training)
-        
+
         # Train the model with ImageNette160
-        model.train(data='imagenette160', epochs=100, imgsz=160)
+        results = model.train(data='imagenette160', epochs=100, imgsz=160)
         ```
 
     === "CLI"
@@ -91,12 +91,12 @@ To use these datasets, simply replace 'imagenette' with 'imagenette160' or 'imag
 
         ```python
         from ultralytics import YOLO
-        
+
         # Load a model
         model = YOLO('yolov8n-cls.pt')  # load a pretrained model (recommended for training)
-        
+
         # Train the model with ImageNette320
-        model.train(data='imagenette320', epochs=100, imgsz=320)
+        results = model.train(data='imagenette320', epochs=100, imgsz=320)
         ```
 
     === "CLI"

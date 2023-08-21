@@ -4,20 +4,21 @@ import os
 import re
 from pathlib import Path
 
-from ultralytics.utils import LOGGER, TESTS_RUNNING, colorstr
+from ultralytics.utils import LOGGER, SETTINGS, TESTS_RUNNING, colorstr
 
 try:
     import mlflow
 
     assert not TESTS_RUNNING  # do not log pytest
     assert hasattr(mlflow, '__version__')  # verify package is not directory
+    assert SETTINGS['mlflow'] is True  # verify integration is enabled
 except (ImportError, AssertionError):
     mlflow = None
 
 
 def on_pretrain_routine_end(trainer):
     """Logs training parameters to MLflow."""
-    global mlflow, run, run_id, experiment_name
+    global mlflow, run, experiment_name
 
     if os.environ.get('MLFLOW_TRACKING_URI') is None:
         mlflow = None
@@ -38,8 +39,7 @@ def on_pretrain_routine_end(trainer):
             run, active_run = mlflow, mlflow.active_run()
             if not active_run:
                 active_run = mlflow.start_run(experiment_id=experiment.experiment_id, run_name=run_name)
-            run_id = active_run.info.run_id
-            LOGGER.info(f'{prefix}Using run_id({run_id}) at {mlflow_location}')
+            LOGGER.info(f'{prefix}Using run_id({active_run.info.run_id}) at {mlflow_location}')
             run.log_params(vars(trainer.model.args))
         except Exception as err:
             LOGGER.error(f'{prefix}Failing init - {repr(err)}')

@@ -52,20 +52,20 @@ Train a YOLOv8-pose model on the COCO128-pose dataset.
 !!! example ""
 
     === "Python"
-    
+
         ```python
         from ultralytics import YOLO
-        
+
         # Load a model
         model = YOLO('yolov8n-pose.yaml')  # build a new model from YAML
         model = YOLO('yolov8n-pose.pt')  # load a pretrained model (recommended for training)
         model = YOLO('yolov8n-pose.yaml').load('yolov8n-pose.pt')  # build from YAML and transfer weights
-        
+
         # Train the model
-        model.train(data='coco8-pose.yaml', epochs=100, imgsz=640)
+        results = model.train(data='coco8-pose.yaml', epochs=100, imgsz=640)
         ```
     === "CLI"
-    
+
         ```bash
         # Build a new model from YAML and start training from scratch
         yolo pose train data=coco8-pose.yaml model=yolov8n-pose.yaml epochs=100 imgsz=640
@@ -90,14 +90,14 @@ training `data` and arguments as model attributes.
 !!! example ""
 
     === "Python"
-    
+
         ```python
         from ultralytics import YOLO
-        
+
         # Load a model
         model = YOLO('yolov8n-pose.pt')  # load an official model
         model = YOLO('path/to/best.pt')  # load a custom model
-        
+
         # Validate the model
         metrics = model.val()  # no arguments needed, dataset and settings remembered
         metrics.box.map    # map50-95
@@ -106,7 +106,7 @@ training `data` and arguments as model attributes.
         metrics.box.maps   # a list contains map50-95 of each category
         ```
     === "CLI"
-    
+
         ```bash
         yolo pose val model=yolov8n-pose.pt  # val official model
         yolo pose val model=path/to/best.pt  # val custom model
@@ -119,19 +119,19 @@ Use a trained YOLOv8n-pose model to run predictions on images.
 !!! example ""
 
     === "Python"
-    
+
         ```python
         from ultralytics import YOLO
-        
+
         # Load a model
         model = YOLO('yolov8n-pose.pt')  # load an official model
         model = YOLO('path/to/best.pt')  # load a custom model
-        
+
         # Predict with the model
         results = model('https://ultralytics.com/images/bus.jpg')  # predict on an image
         ```
     === "CLI"
-    
+
         ```bash
         yolo pose predict model=yolov8n-pose.pt source='https://ultralytics.com/images/bus.jpg'  # predict with official model
         yolo pose predict model=path/to/best.pt source='https://ultralytics.com/images/bus.jpg'  # predict with custom model
@@ -146,19 +146,19 @@ Export a YOLOv8n Pose model to a different format like ONNX, CoreML, etc.
 !!! example ""
 
     === "Python"
-    
+
         ```python
         from ultralytics import YOLO
-        
+
         # Load a model
         model = YOLO('yolov8n-pose.pt')  # load an official model
         model = YOLO('path/to/best.pt')  # load a custom trained
-        
+
         # Export the model
         model.export(format='onnx')
         ```
     === "CLI"
-    
+
         ```bash
         yolo export model=yolov8n-pose.pt format=onnx  # export official model
         yolo export model=path/to/best.pt format=onnx  # export custom trained model
@@ -174,7 +174,7 @@ i.e. `yolo predict model=yolov8n-pose.onnx`. Usage examples are shown for your m
 | [ONNX](https://onnx.ai/)                                           | `onnx`            | `yolov8n-pose.onnx`            | ✅        | `imgsz`, `half`, `dynamic`, `simplify`, `opset`     |
 | [OpenVINO](https://docs.openvino.ai/latest/index.html)             | `openvino`        | `yolov8n-pose_openvino_model/` | ✅        | `imgsz`, `half`                                     |
 | [TensorRT](https://developer.nvidia.com/tensorrt)                  | `engine`          | `yolov8n-pose.engine`          | ✅        | `imgsz`, `half`, `dynamic`, `simplify`, `workspace` |
-| [CoreML](https://github.com/apple/coremltools)                     | `coreml`          | `yolov8n-pose.mlmodel`         | ✅        | `imgsz`, `half`, `int8`, `nms`                      |
+| [CoreML](https://github.com/apple/coremltools)                     | `coreml`          | `yolov8n-pose.mlpackage`       | ✅        | `imgsz`, `half`, `int8`, `nms`                      |
 | [TF SavedModel](https://www.tensorflow.org/guide/saved_model)      | `saved_model`     | `yolov8n-pose_saved_model/`    | ✅        | `imgsz`, `keras`                                    |
 | [TF GraphDef](https://www.tensorflow.org/api_docs/python/tf/Graph) | `pb`              | `yolov8n-pose.pb`              | ❌        | `imgsz`                                             |
 | [TF Lite](https://www.tensorflow.org/lite)                         | `tflite`          | `yolov8n-pose.tflite`          | ✅        | `imgsz`, `half`, `int8`                             |
