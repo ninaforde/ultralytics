@@ -1,4 +1,5 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
+
 import contextlib
 import glob
 import inspect
@@ -15,7 +16,6 @@ from typing import Optional
 import cv2
 import numpy as np
 import pkg_resources as pkg
-import psutil
 import requests
 import torch
 from matplotlib import font_manager
@@ -141,7 +141,7 @@ def check_version(current: str = '0.0.0',
         elif op == '<' and not (current < version):
             result = False
     if not result:
-        warning_message = f'WARNING ⚠️ {name}{required} is required, but {name}{current} is currently installed'
+        warning_message = f'WARNING ⚠️ {name}{op}{required} is required, but {name}=={current} is currently installed'
         if hard:
             raise ModuleNotFoundError(emojis(warning_message))  # assert version requirements met
         if verbose:
@@ -321,7 +321,7 @@ def check_torchvision():
 
     if v_torch in compatibility_table:
         compatible_versions = compatibility_table[v_torch]
-        if all(pkg.parse_version(v_torchvision) != pkg.parse_version(v) for v in compatible_versions):
+        if all(v_torchvision != v for v in compatible_versions):
             print(f'WARNING ⚠️ torchvision=={v_torchvision} is incompatible with torch=={v_torch}.\n'
                   f"Run 'pip install torchvision=={compatible_versions[0]}' to fix torchvision or "
                   "'pip install -U torch torchvision' to update both.\n"
@@ -404,6 +404,8 @@ def check_imshow(warn=False):
 
 def check_yolo(verbose=True, device=''):
     """Return a human-readable YOLO software and hardware summary."""
+    import psutil
+
     from ultralytics.utils.torch_utils import select_device
 
     if is_jupyter():
@@ -507,3 +509,32 @@ def print_args(args: Optional[dict] = None, show_file=True, show_func=False):
         file = Path(file).stem
     s = (f'{file}: ' if show_file else '') + (f'{func}: ' if show_func else '')
     LOGGER.info(colorstr(s) + ', '.join(f'{k}={strip_auth(v)}' for k, v in args.items()))
+
+
+def cuda_device_count() -> int:
+    """Get the number of NVIDIA GPUs available in the environment.
+
+    Returns:
+        (int): The number of NVIDIA GPUs available.
+    """
+    try:
+        # Run the nvidia-smi command and capture its output
+        output = subprocess.check_output(['nvidia-smi', '--query-gpu=count', '--format=csv,noheader,nounits'],
+                                         encoding='utf-8')
+
+        # Take the first line and strip any leading/trailing white space
+        first_line = output.strip().split('\n')[0]
+
+        return int(first_line)
+    except (subprocess.CalledProcessError, FileNotFoundError, ValueError):
+        # If the command fails, nvidia-smi is not found, or output is not an integer, assume no GPUs are available
+        return 0
+
+
+def cuda_is_available() -> bool:
+    """Check if CUDA is available in the environment.
+
+    Returns:
+        (bool): True if one or more NVIDIA GPUs are available, False otherwise.
+    """
+    return cuda_device_count() > 0

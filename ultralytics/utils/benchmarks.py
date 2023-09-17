@@ -32,12 +32,11 @@ from pathlib import Path
 
 import numpy as np
 import torch.cuda
-from tqdm import tqdm
 
 from ultralytics import YOLO
 from ultralytics.cfg import TASK2DATA, TASK2METRIC
 from ultralytics.engine.exporter import export_formats
-from ultralytics.utils import ASSETS, LINUX, LOGGER, MACOS, SETTINGS
+from ultralytics.utils import ASSETS, LINUX, LOGGER, MACOS, SETTINGS, TQDM
 from ultralytics.utils.checks import check_requirements, check_yolo
 from ultralytics.utils.files import file_size
 from ultralytics.utils.torch_utils import select_device
@@ -101,10 +100,10 @@ def benchmark(model=Path(SETTINGS['weights_dir']) / 'yolov8n.pt',
             # Export
             if format == '-':
                 filename = model.ckpt_path or model.cfg
-                export = model  # PyTorch format
+                exported_model = model  # PyTorch format
             else:
                 filename = model.export(imgsz=imgsz, format=format, half=half, int8=int8, device=device, verbose=False)
-                export = YOLO(filename, task=model.task)
+                exported_model = YOLO(filename, task=model.task)
                 assert suffix in str(filename), 'export failed'
             emoji = '❎'  # indicates export succeeded
 
@@ -112,19 +111,19 @@ def benchmark(model=Path(SETTINGS['weights_dir']) / 'yolov8n.pt',
             assert model.task != 'pose' or i != 7, 'GraphDef Pose inference is not supported'
             assert i not in (9, 10), 'inference not supported'  # Edge TPU and TF.js are unsupported
             assert i != 5 or platform.system() == 'Darwin', 'inference only supported on macOS>=10.13'  # CoreML
-            export.predict(ASSETS / 'bus.jpg', imgsz=imgsz, device=device, half=half)
+            exported_model.predict(ASSETS / 'bus.jpg', imgsz=imgsz, device=device, half=half)
 
             # Validate
             data = data or TASK2DATA[model.task]  # task to dataset, i.e. coco8.yaml for task=detect
             key = TASK2METRIC[model.task]  # task to metric, i.e. metrics/mAP50-95(B) for task=detect
-            results = export.val(data=data,
-                                 batch=1,
-                                 imgsz=imgsz,
-                                 plots=False,
-                                 device=device,
-                                 half=half,
-                                 int8=int8,
-                                 verbose=False)
+            results = exported_model.val(data=data,
+                                         batch=1,
+                                         imgsz=imgsz,
+                                         plots=False,
+                                         device=device,
+                                         half=half,
+                                         int8=int8,
+                                         verbose=False)
             metric, speed = results.results_dict[key], results.speed['inference']
             y.append([name, '✅', round(file_size(filename), 1), round(metric, 4), round(speed, 2)])
         except Exception as e:
@@ -182,6 +181,7 @@ class ProfileModels:
                  num_warmup_runs=10,
                  min_time=60,
                  imgsz=640,
+                 half=True,
                  trt=True,
                  device=None):
         self.paths = paths
@@ -189,6 +189,7 @@ class ProfileModels:
         self.num_warmup_runs = num_warmup_runs
         self.min_time = min_time
         self.imgsz = imgsz
+        self.half = half
         self.trt = trt  # run TensorRT profiling
         self.device = device or torch.device(0 if torch.cuda.is_available() else 'cpu')
 
@@ -209,12 +210,12 @@ class ProfileModels:
                 model_info = model.info()
                 if self.trt and self.device.type != 'cpu' and not engine_file.is_file():
                     engine_file = model.export(format='engine',
-                                               half=True,
+                                               half=self.half,
                                                imgsz=self.imgsz,
                                                device=self.device,
                                                verbose=False)
                 onnx_file = model.export(format='onnx',
-                                         half=True,
+                                         half=self.half,
                                          imgsz=self.imgsz,
                                          simplify=True,
                                          device=self.device,
@@ -262,7 +263,7 @@ class ProfileModels:
             data = clipped_data
         return data
 
-    def profile_tensorrt_model(self, engine_file: str, eps: float = 1e-7):
+    def profile_tensorrt_model(self, engine_file: str, eps: float = 1e-3):
         if not self.trt or not Path(engine_file).is_file():
             return 0.0, 0.0
 
@@ -283,14 +284,14 @@ class ProfileModels:
 
         # Timed runs
         run_times = []
-        for _ in tqdm(range(num_runs), desc=engine_file):
+        for _ in TQDM(range(num_runs), desc=engine_file):
             results = model(input_data, imgsz=self.imgsz, verbose=False)
             run_times.append(results[0].speed['inference'])  # Convert to milliseconds
 
         run_times = self.iterative_sigma_clipping(np.array(run_times), sigma=2, max_iters=3)  # sigma clipping
         return np.mean(run_times), np.std(run_times)
 
-    def profile_onnx_model(self, onnx_file: str, eps: float = 1e-7):
+    def profile_onnx_model(self, onnx_file: str, eps: float = 1e-3):
         check_requirements('onnxruntime')
         import onnxruntime as ort
 
@@ -334,7 +335,7 @@ class ProfileModels:
 
         # Timed runs
         run_times = []
-        for _ in tqdm(range(num_runs), desc=onnx_file):
+        for _ in TQDM(range(num_runs), desc=onnx_file):
             start_time = time.time()
             sess.run([output_name], {input_name: input_data})
             run_times.append((time.time() - start_time) * 1000)  # Convert to milliseconds

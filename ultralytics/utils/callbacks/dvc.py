@@ -1,37 +1,33 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
 
-import os
-import re
-from pathlib import Path
-
-import pkg_resources as pkg
-
 from ultralytics.utils import LOGGER, SETTINGS, TESTS_RUNNING
-from ultralytics.utils.torch_utils import model_info_for_loggers
 
 try:
-    from importlib.metadata import version
-
-    import dvclive
-
     assert not TESTS_RUNNING  # do not log pytest
     assert SETTINGS['dvc'] is True  # verify integration is enabled
+    import dvclive
 
-    ver = version('dvclive')
-    if pkg.parse_version(ver) < pkg.parse_version('2.11.0'):
-        LOGGER.debug(f'DVCLive is detected but version {ver} is incompatible (>=2.11 required).')
-        dvclive = None  # noqa: F811
+    assert hasattr(dvclive, '__version__')  # verify package is not directory
+
+    import os
+    import re
+    from pathlib import Path
+
+    from ultralytics.utils.checks import check_version
+
+    if not check_version(dvclive.__version__, '2.11.0', name='dvclive', verbose=True):
+        dvclive = None
+
+    # DVCLive logger instance
+    live = None
+    _processed_plots = {}
+
+    # `on_fit_epoch_end` is called on final validation (probably need to be fixed) for now this is the way we
+    # distinguish final evaluation of the best model vs last epoch validation
+    _training_epoch = False
+
 except (ImportError, AssertionError, TypeError):
     dvclive = None
-
-# DVCLive logger instance
-live = None
-_processed_plots = {}
-
-# `on_fit_epoch_end` is called on final validation (probably need to be fixed)
-# for now this is the way we distinguish final evaluation of the best model vs
-# last epoch validation
-_training_epoch = False
 
 
 def _log_images(path, prefix=''):
@@ -75,9 +71,7 @@ def on_pretrain_routine_start(trainer):
     try:
         global live
         live = dvclive.Live(save_dvc_exp=True, cache_images=True)
-        LOGGER.info(
-            f'DVCLive is detected and auto logging is enabled (can be disabled in the {SETTINGS.file} with `dvc: false`).'
-        )
+        LOGGER.info("DVCLive is detected and auto logging is enabled (run 'yolo settings dvc=False' to disable).")
     except Exception as e:
         LOGGER.warning(f'WARNING ⚠️ DVCLive installed but not initialized correctly, not logging this run. {e}')
 
@@ -104,6 +98,7 @@ def on_fit_epoch_end(trainer):
             live.log_metric(metric, value)
 
         if trainer.epoch == 0:
+            from ultralytics.utils.torch_utils import model_info_for_loggers
             for metric, value in model_info_for_loggers(trainer).items():
                 live.log_metric(metric, value, plot=False)
 
