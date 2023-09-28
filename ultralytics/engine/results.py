@@ -13,7 +13,7 @@ import numpy as np
 import torch
 
 from ultralytics.data.augment import LetterBox
-from ultralytics.utils import LOGGER, SimpleClass, deprecation_warn, ops
+from ultralytics.utils import LOGGER, SimpleClass, ops
 from ultralytics.utils.plotting import Annotator, colors, save_one_box
 
 
@@ -167,8 +167,7 @@ class Results(SimpleClass):
             boxes=True,
             masks=True,
             probs=True,
-            color_list=None,
-            **kwargs  # deprecated args TODO: remove support in 8.2
+            color_list=None
     ):
         """
         Plots the detection results on an input RGB image. Accepts a numpy array (cv2) or a PIL Image.
@@ -208,17 +207,6 @@ class Results(SimpleClass):
         """
         if img is None and isinstance(self.orig_img, torch.Tensor):
             img = (self.orig_img[0].detach().permute(1, 2, 0).contiguous() * 255).to(torch.uint8).cpu().numpy()
-
-        # Deprecation warn TODO: remove in 8.2
-        if 'show_conf' in kwargs:
-            deprecation_warn('show_conf', 'conf')
-            conf = kwargs['show_conf']
-            assert isinstance(conf, bool), '`show_conf` should be of boolean type, i.e, show_conf=True/False'
-
-        if 'line_thickness' in kwargs:
-            deprecation_warn('line_thickness', 'line_width')
-            line_width = kwargs['line_thickness']
-            assert isinstance(line_width, int), '`line_width` should be of int type, i.e, line_width=3'
 
         names = self.names
         pred_boxes, show_boxes = self.boxes, boxes
@@ -447,19 +435,12 @@ class Boxes(BaseTensor):
         xywh[..., [1, 3]] /= self.orig_shape[0]
         return xywh
 
-    @property
-    def boxes(self):
-        """Return the raw bboxes tensor (deprecated)."""
-        LOGGER.warning("WARNING ⚠️ 'Boxes.boxes' is deprecated. Use 'Boxes.data' instead.")
-        return self.data
-
 
 class Masks(BaseTensor):
     """
     A class for storing and manipulating detection masks.
 
     Attributes:
-        segments (list): Deprecated property for segments (normalized).
         xy (list): A list of segments in pixel coordinates.
         xyn (list): A list of normalized segments.
 
@@ -478,15 +459,6 @@ class Masks(BaseTensor):
 
     @property
     @lru_cache(maxsize=1)
-    def segments(self):
-        """Return segments (normalized). Deprecated; use xyn property instead."""
-        LOGGER.warning(
-            "WARNING ⚠️ 'Masks.segments' is deprecated. Use 'Masks.xyn' for segments (normalized) and 'Masks.xy' for segments (pixels) instead."
-        )
-        return self.xyn
-
-    @property
-    @lru_cache(maxsize=1)
     def xyn(self):
         """Return normalized segments."""
         return [
@@ -500,12 +472,6 @@ class Masks(BaseTensor):
         return [
             ops.scale_coords(self.data.shape[1:], x, self.orig_shape, normalize=False)
             for x in ops.masks2segments(self.data)]
-
-    @property
-    def masks(self):
-        """Return the raw masks tensor. Deprecated; use data attribute instead."""
-        LOGGER.warning("WARNING ⚠️ 'Masks.masks' is deprecated. Use 'Masks.data' instead.")
-        return self.data
 
 
 class Keypoints(BaseTensor):

@@ -44,7 +44,10 @@ def smart_inference_mode():
 
     def decorate(fn):
         """Applies appropriate torch decorator for inference mode based on torch version."""
-        return (torch.inference_mode if TORCH_1_9 else torch.no_grad)()(fn)
+        if TORCH_1_9 and torch.is_inference_mode_enabled():
+            return fn  # already in inference_mode, act as a pass-through
+        else:
+            return (torch.inference_mode if TORCH_1_9 else torch.no_grad)()(fn)
 
     return decorate
 
@@ -76,11 +79,11 @@ def select_device(device='', batch=0, newline=False, verbose=True):
         verbose (bool, optional): If True, logs the device information. Defaults to True.
 
     Returns:
-        torch.device: Selected device.
+        (torch.device): Selected device.
 
     Raises:
         ValueError: If the specified device is not available or if the batch size is not a multiple of the number of
-        devices when using multiple GPUs.
+            devices when using multiple GPUs.
 
     Examples:
         >>> select_device('cuda:0')
