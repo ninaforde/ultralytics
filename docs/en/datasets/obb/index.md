@@ -32,7 +32,7 @@ An example of a `*.txt` label file for the above image, which contains an object
 
 To train a model using these OBB formats:
 
-!!! example ""
+!!! Example
 
     === "Python"
 
@@ -57,7 +57,7 @@ To train a model using these OBB formats:
 
 Currently, the following datasets with Oriented Bounding Boxes are supported:
 
-- [**DOTA v2**](./dota-v2.md): DOTA (A Large-scale Dataset for Object Detection in Aerial Images) version 2, emphasizes detection from aerial perspectives and contains oriented bounding boxes with 1.7 million instances and 11,268 images.
+- [**DOTA v2**](dota-v2.md): DOTA (A Large-scale Dataset for Object Detection in Aerial Images) version 2, emphasizes detection from aerial perspectives and contains oriented bounding boxes with 1.7 million instances and 11,268 images.
 
 ### Incorporating your own OBB dataset
 
@@ -69,7 +69,7 @@ For those looking to introduce their own datasets with oriented bounding boxes, 
 
 Transitioning labels from the DOTA dataset format to the YOLO OBB format can be achieved with this script:
 
-!!! example ""
+!!! Example
 
     === "Python"
 

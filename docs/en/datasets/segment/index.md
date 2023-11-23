@@ -33,7 +33,7 @@ Here is an example of the YOLO dataset format for a single image with two object
 1 0.504 0.000 0.501 0.004 0.498 0.004 0.493 0.010 0.492 0.0104
 ```
 
-!!! tip "Tip"
+!!! Tip "Tip"
 
       - The length of each row does **not** have to be equal.
       - Each segmentation label must have a **minimum of 3 xy points**: `<class-index> <x1> <y1> <x2> <y2> <x3> <y3>`
@@ -66,7 +66,7 @@ The `train` and `val` fields specify the paths to the directories containing the
 
 ## Usage
 
-!!! example ""
+!!! Example
 
     === "Python"
 
@@ -101,7 +101,7 @@ If you have your own dataset and would like to use it for training segmentation 
 
 You can easily convert labels from the popular COCO dataset format to the YOLO format using the following code snippet:
 
-!!! example ""
+!!! Example
 
     === "Python"
 
@@ -123,7 +123,7 @@ Auto-annotation is an essential feature that allows you to generate a segmentati
 
 To auto-annotate your dataset using the Ultralytics framework, you can use the `auto_annotate` function as shown below:
 
-!!! example ""
+!!! Example
 
     === "Python"
 
@@ -143,6 +143,6 @@ Certainly, here is the table updated with code snippets:
 | `device`     | `str, optional`         | Device to run the models on. Defaults to an empty string (CPU or GPU, if available).                        | `''`           |
 | `output_dir` | `str or None, optional` | Directory to save the annotated results. Defaults to a `'labels'` folder in the same directory as `'data'`. | `None`         |
 
-The `auto_annotate` function takes the path to your images, along with optional arguments for specifying the pre-trained detection and [SAM segmentation models](https://docs.ultralytics.com/models/sam), the device to run the models on, and the output directory for saving the annotated results.
+The `auto_annotate` function takes the path to your images, along with optional arguments for specifying the pre-trained detection and [SAM segmentation models](../../models/sam.md), the device to run the models on, and the output directory for saving the annotated results.
 
 By leveraging the power of pre-trained models, auto-annotation can significantly reduce the time and effort required for creating high-quality segmentation datasets. This feature is particularly useful for researchers and developers working with large image collections, as it allows them to focus on model development and evaluation rather than manual annotation.

@@ -23,7 +23,7 @@ Hyperparameters are high-level, structural settings for the algorithm. They are 
   <img width="640" src="https://user-images.githubusercontent.com/26833433/263858934-4f109a2f-82d9-4d08-8bd6-6fd1ff520bcd.png" alt="Hyperparameter Tuning Visual">
 </p>
 
-For a full list of augmentation hyperparameters used in YOLOv8 please refer to [https://docs.ultralytics.com/usage/cfg/#augmentation](https://docs.ultralytics.com/usage/cfg/#augmentation).
+For a full list of augmentation hyperparameters used in YOLOv8 please refer to the [configurations page](../usage/cfg.md#augmentation).
 
 ### Genetic Evolution and Mutation
 
@@ -69,7 +69,7 @@ The process is repeated until either the set number of iterations is reached or 
 
 Here's how to use the `model.tune()` method to utilize the `Tuner` class for hyperparameter tuning of YOLOv8n on COCO8 for 30 epochs with an AdamW optimizer and skipping plotting, checkpointing and validation other than on final epoch for faster Tuning.
 
-!!! example ""
+!!! Example
 
     === "Python"
 
@@ -188,7 +188,7 @@ This file contains scatter plots generated from `tune_results.csv`, helping you 
 
 This directory contains the saved PyTorch models for the last and the best iterations during the hyperparameter tuning process.
 
-- **`last.pt`**: The last.pt weights for the iteration that achieved the best fitness score.
+- **`last.pt`**: The last.pt are the weights from the last epoch of training.
 - **`best.pt`**: The best.pt weights for the iteration that achieved the best fitness score.
 
 Using these results, you can make more informed decisions for your future model trainings and analyses. Feel free to consult these artifacts to understand how well your model performed and how you might improve it further.
@@ -200,7 +200,7 @@ The hyperparameter tuning process in Ultralytics YOLO is simplified yet powerful
 ### Further Reading
 
 1. [Hyperparameter Optimization in Wikipedia](https://en.wikipedia.org/wiki/Hyperparameter_optimization)
-2. [YOLOv5 Hyperparameter Evolution Guide](https://docs.ultralytics.com/yolov5/tutorials/hyperparameter_evolution/)
-3. [Efficient Hyperparameter Tuning with Ray Tune and YOLOv8](https://docs.ultralytics.com/integrations/ray-tune/)
+2. [YOLOv5 Hyperparameter Evolution Guide](../yolov5/tutorials/hyperparameter_evolution.md)
+3. [Efficient Hyperparameter Tuning with Ray Tune and YOLOv8](../integrations/ray-tune.md)
 
 For deeper insights, you can explore the `Tuner` class source code and accompanying documentation. Should you have any questions, feature requests, or need further assistance, feel free to reach out to us on [GitHub](https://github.com/ultralytics/ultralytics/issues/new/choose) or [Discord](https://ultralytics.com/discord).

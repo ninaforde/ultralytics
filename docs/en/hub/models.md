@@ -58,7 +58,7 @@ In this step, you have to choose the project in which you want to create your mo
 
     ![Ultralytics HUB screenshot of the Train Model dialog with an arrow pointing to the project name](https://raw.githubusercontent.com/ultralytics/assets/main/docs/hub/models/hub_train_model_7.jpg)
 
-!!! info "Info"
+!!! Info "Info"
 
     You can read more about the available [YOLOv8](https://docs.ultralytics.com/models/yolov8) (and [YOLOv5](https://docs.ultralytics.com/models/yolov5)) architectures in our documentation.
 
@@ -128,7 +128,7 @@ You can also use our Ultralytics Cloud API to effortlessly [run inference](https
 
 ![Ultralytics HUB screenshot of the Preview tab (Ultralytics Cloud API card) inside the Model page](https://raw.githubusercontent.com/ultralytics/assets/main/docs/hub/models/hub_preview_model_2.jpg)
 
-Furthermore, you can preview your model in real-time directly on your [iOS](https://apps.apple.com/xk/app/ultralytics/id1583935240) or [Android](https://play.google.com/store/apps/details?id=com.ultralytics.ultralytics_app) mobile device by [downloading](https://ultralytics.com/app_install) our [Ultralytics HUB Mobile Application](./app/index.md).
+Furthermore, you can preview your model in real-time directly on your [iOS](https://apps.apple.com/xk/app/ultralytics/id1583935240) or [Android](https://play.google.com/store/apps/details?id=com.ultralytics.ultralytics_app) mobile device by [downloading](https://ultralytics.com/app_install) our [Ultralytics HUB Mobile Application](app/index.md).
 
 ![Ultralytics HUB screenshot of the Deploy tab inside the Model page with arrow pointing to the Real-Time Preview card](https://raw.githubusercontent.com/ultralytics/assets/main/docs/hub/models/hub_preview_model_3.jpg)
 
@@ -146,7 +146,7 @@ You can export your model to 13 different formats, including ONNX, OpenVINO, Cor
 
 ## Share Model
 
-!!! info "Info"
+!!! Info "Info"
 
     Ultralytics HUB's sharing functionality provides a convenient way to share models with others. This feature is designed to accommodate both existing Ultralytics HUB users and those who have yet to create an account.
 
