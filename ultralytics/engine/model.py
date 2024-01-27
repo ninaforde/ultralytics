@@ -259,8 +259,8 @@ class Model(nn.Module):
             x in sys.argv for x in ("predict", "track", "mode=predict", "mode=track")
         )
 
-        custom = {"conf": 0.25, "save": is_cli}  # method defaults
-        args = {**self.overrides, **custom, **kwargs, "mode": "predict"}  # highest priority args on the right
+        custom = {"conf": 0.25, "save": is_cli, "mode": "predict"}  # method defaults
+        args = {**self.overrides, **custom, **kwargs}  # highest priority args on the right
         prompts = args.pop("prompts", None)  # for SAM-type models
 
         if not self.predictor:
@@ -427,7 +427,9 @@ class Model(nn.Module):
     @property
     def names(self):
         """Returns class names of the loaded model."""
-        return self.model.names if hasattr(self.model, "names") else None
+        from ultralytics.nn.autobackend import check_class_names
+
+        return check_class_names(self.model.names) if hasattr(self.model, "names") else None
 
     @property
     def device(self):
