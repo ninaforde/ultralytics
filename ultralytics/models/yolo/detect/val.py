@@ -32,7 +32,9 @@ class DetectionValidator(BaseValidator):
         ```
     """
 
-    def __init__(self, dataloader=None, save_dir=None, pbar=None, args=None, _callbacks=None):
+    def __init__(
+        self, dataloader=None, save_dir=None, pbar=None, args=None, _callbacks=None
+    ):
         """Initialize detection model with necessary variables and settings."""
         super().__init__(dataloader, save_dir, pbar, args, _callbacks)
         self.nt_per_class = None
@@ -43,21 +45,35 @@ class DetectionValidator(BaseValidator):
         self.iouv = torch.linspace(0.5, 0.95, 10)  # iou vector for mAP@0.5:0.95
         self.niou = self.iouv.numel()
         self.lb = []  # for autolabelling
+        self.num_fn = 0
+        self.num_fp = 0
+        self.nb_detections = 0
+        self.nb_labels = 0
 
     def preprocess(self, batch):
         """Preprocesses batch of images for YOLO training."""
         batch["img"] = batch["img"].to(self.device, non_blocking=True)
-        batch["img"] = (batch["img"].half() if self.args.half else batch["img"].float()) / 255
+        batch["img"] = (
+            batch["img"].half() if self.args.half else batch["img"].float()
+        ) / 255
         for k in ["batch_idx", "cls", "bboxes"]:
             batch[k] = batch[k].to(self.device)
 
         if self.args.save_hybrid:
             height, width = batch["img"].shape[2:]
             nb = len(batch["img"])
-            bboxes = batch["bboxes"] * torch.tensor((width, height, width, height), device=self.device)
+            bboxes = batch["bboxes"] * torch.tensor(
+                (width, height, width, height), device=self.device
+            )
             self.lb = (
                 [
-                    torch.cat([batch["cls"][batch["batch_idx"] == i], bboxes[batch["batch_idx"] == i]], dim=-1)
+                    torch.cat(
+                        [
+                            batch["cls"][batch["batch_idx"] == i],
+                            bboxes[batch["batch_idx"] == i],
+                        ],
+                        dim=-1,
+                    )
                     for i in range(nb)
                 ]
                 if self.args.save_hybrid
@@ -69,9 +85,17 @@ class DetectionValidator(BaseValidator):
     def init_metrics(self, model):
         """Initialize evaluation metrics for YOLO."""
         val = self.data.get(self.args.split, "")  # validation path
-        self.is_coco = isinstance(val, str) and "coco" in val and val.endswith(f"{os.sep}val2017.txt")  # is COCO
-        self.class_map = converter.coco80_to_coco91_class() if self.is_coco else list(range(1000))
-        self.args.save_json |= self.is_coco and not self.training  # run on final val if training COCO
+        self.is_coco = (
+            isinstance(val, str)
+            and "coco" in val
+            and val.endswith(f"{os.sep}val2017.txt")
+        )  # is COCO
+        self.class_map = (
+            converter.coco80_to_coco91_class() if self.is_coco else list(range(1000))
+        )
+        self.args.save_json |= (
+            self.is_coco and not self.training
+        )  # run on final val if training COCO
         self.names = model.names
         self.nc = len(model.names)
         self.metrics.names = self.names
@@ -83,7 +107,15 @@ class DetectionValidator(BaseValidator):
 
     def get_desc(self):
         """Return a formatted string summarizing class metrics of YOLO model."""
-        return ("%22s" + "%11s" * 6) % ("Class", "Images", "Instances", "Box(P", "R", "mAP50", "mAP50-95)")
+        return ("%22s" + "%11s" * 6) % (
+            "Class",
+            "Images",
+            "Instances",
+            "Box(P",
+            "R",
+            "mAP50",
+            "mAP50-95)",
+        )
 
     def postprocess(self, preds):
         """Apply Non-maximum suppression to prediction outputs."""
@@ -106,15 +138,25 @@ class DetectionValidator(BaseValidator):
         imgsz = batch["img"].shape[2:]
         ratio_pad = batch["ratio_pad"][si]
         if len(cls):
-            bbox = ops.xywh2xyxy(bbox) * torch.tensor(imgsz, device=self.device)[[1, 0, 1, 0]]  # target boxes
-            ops.scale_boxes(imgsz, bbox, ori_shape, ratio_pad=ratio_pad)  # native-space labels
-        return dict(cls=cls, bbox=bbox, ori_shape=ori_shape, imgsz=imgsz, ratio_pad=ratio_pad)
+            bbox = (
+                ops.xywh2xyxy(bbox)
+                * torch.tensor(imgsz, device=self.device)[[1, 0, 1, 0]]
+            )  # target boxes
+            ops.scale_boxes(
+                imgsz, bbox, ori_shape, ratio_pad=ratio_pad
+            )  # native-space labels
+        return dict(
+            cls=cls, bbox=bbox, ori_shape=ori_shape, imgsz=imgsz, ratio_pad=ratio_pad
+        )
 
     def _prepare_pred(self, pred, pbatch):
         """Prepares a batch of images and annotations for validation."""
         predn = pred.clone()
         ops.scale_boxes(
-            pbatch["imgsz"], predn[:, :4], pbatch["ori_shape"], ratio_pad=pbatch["ratio_pad"]
+            pbatch["imgsz"],
+            predn[:, :4],
+            pbatch["ori_shape"],
+            ratio_pad=pbatch["ratio_pad"],
         )  # native-space pred
         return predn
 
@@ -140,7 +182,9 @@ class DetectionValidator(BaseValidator):
                         self.stats[k].append(stat[k])
                     # TODO: obb has not supported confusion_matrix yet.
                     if self.args.plots and self.args.task != "obb":
-                        self.confusion_matrix.process_batch(detections=None, gt_bboxes=bbox, gt_cls=cls)
+                        self.confusion_matrix.process_batch(
+                            detections=None, gt_bboxes=bbox, gt_cls=cls
+                        )
                         self.output_bad_cases(None, labelsn, batch, si)
                 continue
 
@@ -165,7 +209,9 @@ class DetectionValidator(BaseValidator):
             if self.args.save_json:
                 self.pred_to_json(predn, batch["im_file"][si])
             if self.args.save_txt:
-                file = self.save_dir / "labels" / f'{Path(batch["im_file"][si]).stem}.txt'
+                file = (
+                    self.save_dir / "labels" / f'{Path(batch["im_file"][si]).stem}.txt'
+                )
                 self.save_one_txt(predn, self.args.save_conf, pbatch["ori_shape"], file)
 
     def finalize_metrics(self, *args, **kwargs):
@@ -175,7 +221,9 @@ class DetectionValidator(BaseValidator):
 
     def get_stats(self):
         """Returns metrics statistics and results dictionary."""
-        stats = {k: torch.cat(v, 0).cpu().numpy() for k, v in self.stats.items()}  # to numpy
+        stats = {
+            k: torch.cat(v, 0).cpu().numpy() for k, v in self.stats.items()
+        }  # to numpy
         if len(stats) and stats["tp"].any():
             self.metrics.process(**stats)
         self.nt_per_class = np.bincount(
@@ -186,19 +234,35 @@ class DetectionValidator(BaseValidator):
     def print_results(self):
         """Prints training/validation set metrics per class."""
         pf = "%22s" + "%11i" * 2 + "%11.3g" * len(self.metrics.keys)  # print format
-        LOGGER.info(pf % ("all", self.seen, self.nt_per_class.sum(), *self.metrics.mean_results()))
+        LOGGER.info(
+            pf
+            % ("all", self.seen, self.nt_per_class.sum(), *self.metrics.mean_results())
+        )
         if self.nt_per_class.sum() == 0:
-            LOGGER.warning(f"WARNING ⚠️ no labels found in {self.args.task} set, can not compute metrics without labels")
+            LOGGER.warning(
+                f"WARNING ⚠️ no labels found in {self.args.task} set, can not compute metrics without labels"
+            )
 
         # Print results per class
         if self.args.verbose and not self.training and self.nc > 1 and len(self.stats):
             for i, c in enumerate(self.metrics.ap_class_index):
-                LOGGER.info(pf % (self.names[c], self.seen, self.nt_per_class[c], *self.metrics.class_result(i)))
+                LOGGER.info(
+                    pf
+                    % (
+                        self.names[c],
+                        self.seen,
+                        self.nt_per_class[c],
+                        *self.metrics.class_result(i),
+                    )
+                )
 
         if self.args.plots:
             for normalize in True, False:
                 self.confusion_matrix.plot(
-                    save_dir=self.save_dir, names=self.names.values(), normalize=normalize, on_plot=self.on_plot
+                    save_dir=self.save_dir,
+                    names=self.names.values(),
+                    normalize=normalize,
+                    on_plot=self.on_plot,
                 )
 
     def output_bad_cases(self, detections, labels, batch, si):
@@ -215,15 +279,27 @@ class DetectionValidator(BaseValidator):
         detections = detections[detections[:, 4] > self.confusion_matrix.conf]
         # gt_classes = labels[:, 0].int()
         detection_classes = detections[:, 5].int()
+        self.nb_detections += len(detection_classes)
+        self.nb_labels += len(labels)
+        print("detections nb and labels nb:", self.nb_detections, self.nb_labels)
         iou = box_iou(labels[:, 1:], detections[:, :4])
 
         boxes = torch.cat(
-            [detections[:, :4], detections[:, 4].reshape(-1, 1), detection_classes.reshape(-1, 1)], dim=1
+            [
+                detections[:, :4],
+                detections[:, 4].reshape(-1, 1),
+                detection_classes.reshape(-1, 1),
+            ],
+            dim=1,
         ).cpu()
 
         x = torch.where(iou > self.confusion_matrix.iou_thres)
         if x[0].shape[0]:
-            matches = torch.cat((torch.stack(x, 1), iou[x[0], x[1]][:, None]), 1).cpu().numpy()
+            matches = (
+                torch.cat((torch.stack(x, 1), iou[x[0], x[1]][:, None]), 1)
+                .cpu()
+                .numpy()
+            )
             if x[0].shape[0] > 1:
                 matches = matches[matches[:, 2].argsort()[::-1]]
                 matches = matches[np.unique(matches[:, 1], return_index=True)[1]]
@@ -239,49 +315,80 @@ class DetectionValidator(BaseValidator):
         # We need to find the pairs not in matches here. That is iou < iou_thres
         # Find the ground truth box without prediction box, and prediction box without ground truth
         x = torch.where(iou > self.confusion_matrix.iou_thres)
-        y = torch.where(iou <= self.confusion_matrix.iou_thres)  # y[0] is label, y[1] is predict
+        y = torch.where(
+            iou <= self.confusion_matrix.iou_thres
+        )  # y[0] is label, y[1] is predict
         labels_matches = matches[:, 0]
         pred_matches = matches[:, 1]
 
         false_negative = np.setdiff1d(list(range(labels.shape[0])), labels_matches)
         false_positive = np.setdiff1d(list(range(detections.shape[0])), pred_matches)
-
         if false_negative.shape[0] > 0:
             # plot false negative images
             # In false negative part, show all correct detections, then append the false negative box from label
+            print("FALSE NEGATIVE", false_negative)
 
             fn_labels = labels[false_negative].cpu()
-            correct_labels = labels[[i for i in range(labels.shape[0]) if i not in false_negative]].cpu()
+            print("fn labels", fn_labels)
+            correct_labels = labels[
+                [i for i in range(labels.shape[0]) if i not in false_negative]
+            ].cpu()
 
             label_boxes = torch.cat(
                 [
                     torch.cat(
-                        [correct_labels, torch.zeros(correct_labels.shape[0], 1)],  # Correct label boxes
+                        [
+                            correct_labels,
+                            torch.zeros(correct_labels.shape[0], 1),
+                        ],  # Correct label boxes
                         dim=1,
                     )[:, torch.tensor([1, 2, 3, 4, 5, 0])],
                     torch.cat(
-                        [fn_labels, torch.zeros(fn_labels.shape[0], 1)],  # Under kill label boxes
+                        [
+                            fn_labels,
+                            torch.zeros(fn_labels.shape[0], 1),
+                        ],  # Under kill label boxes
                         dim=1,
                     )[:, torch.tensor([1, 2, 3, 4, 5, 0])],
                 ]
             )  # Rearrange the element position of fn_labels
+
             detection_boxes = boxes
 
             file_name = batch["im_file"][si]
 
-            label_color_list = [colors.GREEN_COLOR] * correct_labels.shape[0] + [colors.RED_COLOR] * fn_labels.shape[0]
+            num_underkill = fn_labels.shape[0]
+            self.num_fn += num_underkill
+            file = os.path.split(file_name)[1]
+            print("num", num_underkill, self.num_fn, file)
+
+            label_color_list = [colors.GREEN_COLOR] * correct_labels.shape[0] + [
+                colors.RED_COLOR
+            ] * fn_labels.shape[0]
             detection_color_list = [colors.BLUE_COLOR] * detections.shape[0]
 
             combined_img = self._generate_combined_img(
-                detection_boxes, detection_color_list, label_boxes, label_color_list, file_name
+                detection_boxes,
+                detection_color_list,
+                label_boxes,
+                label_color_list,
+                file_name,
             )
 
-            cv2.imwrite(str(self.save_dir / "false_negative_underkill" / os.path.split(file_name)[1]), combined_img)
+            cv2.imwrite(
+                str(
+                    self.save_dir
+                    / "false_negative_underkill"
+                    / os.path.split(file_name)[1]
+                ),
+                combined_img,
+            )
 
         if false_positive.shape[0] > 0:
             # plot false positive images
             # In false positive mode, will show all detection result on images,
             # then mark the false positive part with red
+            print("FALSE POSITIVE", false_positive)
 
             detection_boxes = boxes
             label_boxes = torch.cat(
@@ -291,26 +398,64 @@ class DetectionValidator(BaseValidator):
 
             label_color_list = [colors.GREEN_COLOR] * labels.shape[0]
             detection_color_list = [colors.BLUE_COLOR] * detections.shape[0]
-            color_list = [colors.GREEN_COLOR] * detections.shape[0] + [colors.BLUE_COLOR] * labels.shape[0]
+            color_list = [colors.GREEN_COLOR] * detections.shape[0] + [
+                colors.BLUE_COLOR
+            ] * labels.shape[0]
             for i in false_positive:
-                detection_color_list[i] = colors.RED_COLOR  # Replace the false positive part with red color
+                detection_color_list[i] = (
+                    colors.RED_COLOR
+                )  # Replace the false positive part with red color
+                fp_labels = detection_boxes[i]
+                print("fp labels", fp_labels)
+
             file_name = batch["im_file"][si]
 
+            num_overkill = len(false_positive)
+            self.num_fp += num_overkill
+            print("num false positive HERE", num_overkill, self.num_fp)
             combined_img = self._generate_combined_img(
-                detection_boxes, detection_color_list, label_boxes, label_color_list, file_name
+                detection_boxes,
+                detection_color_list,
+                label_boxes,
+                label_color_list,
+                file_name,
             )
 
-            cv2.imwrite(str(self.save_dir / "false_positive_overkill" / os.path.split(file_name)[1]), combined_img)
+            cv2.imwrite(
+                str(
+                    self.save_dir
+                    / "false_positive_overkill"
+                    / os.path.split(file_name)[1]
+                ),
+                combined_img,
+            )
 
-    def _generate_combined_img(self, detection_boxes, detection_color_list, label_boxes, label_color_list, file_name):
+    def _generate_combined_img(
+        self,
+        detection_boxes,
+        detection_color_list,
+        label_boxes,
+        label_color_list,
+        file_name,
+    ):
         label_plot_args = dict(line_width=1, boxes=True, color_list=label_color_list)
-        detection_plot_args = dict(line_width=1, boxes=True, color_list=detection_color_list)
+        detection_plot_args = dict(
+            line_width=1, boxes=True, color_list=detection_color_list
+        )
         # Prepare label image
-        label_result = Results(orig_img=cv2.imread(file_name), path=file_name, names=self.names, boxes=label_boxes)
+        label_result = Results(
+            orig_img=cv2.imread(file_name),
+            path=file_name,
+            names=self.names,
+            boxes=label_boxes,
+        )
         label_plotted_img = label_result.plot(**label_plot_args)
         # Prepare detection image
         detection_result = Results(
-            orig_img=cv2.imread(file_name), path=file_name, names=self.names, boxes=detection_boxes
+            orig_img=cv2.imread(file_name),
+            path=file_name,
+            names=self.names,
+            boxes=detection_boxes,
         )
         detection_plotted_img = detection_result.plot(**detection_plot_args)
 
@@ -318,17 +463,39 @@ class DetectionValidator(BaseValidator):
             label_plotted_img, 25, 0, 0, 0, cv2.BORDER_CONSTANT, value=[127, 127, 127]
         )
         detection_plotted_img = cv2.copyMakeBorder(
-            detection_plotted_img, 25, 0, 0, 0, cv2.BORDER_CONSTANT, value=[127, 127, 127]
+            detection_plotted_img,
+            25,
+            0,
+            0,
+            0,
+            cv2.BORDER_CONSTANT,
+            value=[127, 127, 127],
         )
 
         label_plotted_img = cv2.putText(
-            label_plotted_img, "True", (20, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1, cv2.LINE_AA
+            label_plotted_img,
+            "True",
+            (20, 18),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (0, 0, 0),
+            1,
+            cv2.LINE_AA,
         )
         detection_plotted_img = cv2.putText(
-            detection_plotted_img, "Predicted", (20, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1, cv2.LINE_AA
+            detection_plotted_img,
+            "Predicted",
+            (20, 18),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (0, 0, 0),
+            1,
+            cv2.LINE_AA,
         )
 
-        combined_img = np.concatenate([label_plotted_img, detection_plotted_img], axis=1)
+        combined_img = np.concatenate(
+            [label_plotted_img, detection_plotted_img], axis=1
+        )
         return combined_img
 
     def _process_batch(self, detections, gt_bboxes, gt_cls):
@@ -356,12 +523,16 @@ class DetectionValidator(BaseValidator):
             mode (str): `train` mode or `val` mode, users are able to customize different augmentations for each mode.
             batch (int, optional): Size of batches, this is for `rect`. Defaults to None.
         """
-        return build_yolo_dataset(self.args, img_path, batch, self.data, mode=mode, stride=self.stride)
+        return build_yolo_dataset(
+            self.args, img_path, batch, self.data, mode=mode, stride=self.stride
+        )
 
     def get_dataloader(self, dataset_path, batch_size):
         """Construct and return dataloader."""
         dataset = self.build_dataset(dataset_path, batch=batch_size, mode="val")
-        return build_dataloader(dataset, batch_size, self.args.workers, shuffle=False, rank=-1)  # return dataloader
+        return build_dataloader(
+            dataset, batch_size, self.args.workers, shuffle=False, rank=-1
+        )  # return dataloader
 
     def plot_val_samples(self, batch, ni):
         """Plot validation image samples."""
@@ -391,7 +562,9 @@ class DetectionValidator(BaseValidator):
         """Save YOLO detections to a txt file in normalized coordinates in a specific format."""
         gn = torch.tensor(shape)[[1, 0, 1, 0]]  # normalization gain whwh
         for *xyxy, conf, cls in predn.tolist():
-            xywh = (ops.xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
+            xywh = (
+                (ops.xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()
+            )  # normalized xywh
             line = (cls, *xywh, conf) if save_conf else (cls, *xywh)  # label format
             with open(file, "a") as f:
                 f.write(("%g " * len(line)).rstrip() % line + "\n")
@@ -415,9 +588,13 @@ class DetectionValidator(BaseValidator):
     def eval_json(self, stats):
         """Evaluates YOLO output in JSON format and returns performance statistics."""
         if self.args.save_json and self.is_coco and len(self.jdict):
-            anno_json = self.data["path"] / "annotations/instances_val2017.json"  # annotations
+            anno_json = (
+                self.data["path"] / "annotations/instances_val2017.json"
+            )  # annotations
             pred_json = self.save_dir / "predictions.json"  # predictions
-            LOGGER.info(f"\nEvaluating pycocotools mAP using {pred_json} and {anno_json}...")
+            LOGGER.info(
+                f"\nEvaluating pycocotools mAP using {pred_json} and {anno_json}..."
+            )
             try:  # https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocoEvalDemo.ipynb
                 check_requirements("pycocotools>=2.0.6")
                 from pycocotools.coco import COCO  # noqa
@@ -426,14 +603,20 @@ class DetectionValidator(BaseValidator):
                 for x in anno_json, pred_json:
                     assert x.is_file(), f"{x} file not found"
                 anno = COCO(str(anno_json))  # init annotations api
-                pred = anno.loadRes(str(pred_json))  # init predictions api (must pass string, not Path)
+                pred = anno.loadRes(
+                    str(pred_json)
+                )  # init predictions api (must pass string, not Path)
                 eval = COCOeval(anno, pred, "bbox")
                 if self.is_coco:
-                    eval.params.imgIds = [int(Path(x).stem) for x in self.dataloader.dataset.im_files]  # images to eval
+                    eval.params.imgIds = [
+                        int(Path(x).stem) for x in self.dataloader.dataset.im_files
+                    ]  # images to eval
                 eval.evaluate()
                 eval.accumulate()
                 eval.summarize()
-                stats[self.metrics.keys[-1]], stats[self.metrics.keys[-2]] = eval.stats[:2]  # update mAP50-95 and mAP50
+                stats[self.metrics.keys[-1]], stats[self.metrics.keys[-2]] = eval.stats[
+                    :2
+                ]  # update mAP50-95 and mAP50
             except Exception as e:
                 LOGGER.warning(f"pycocotools unable to run: {e}")
         return stats
