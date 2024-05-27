@@ -104,6 +104,7 @@ class DetectionValidator(BaseValidator):
         self.seen = 0
         self.jdict = []
         self.stats = dict(tp=[], conf=[], pred_cls=[], target_cls=[])
+        self.add_callback("on_val_end", callback=self.callback_nb)
 
     def get_desc(self):
         """Return a formatted string summarizing class metrics of YOLO model."""
@@ -265,6 +266,15 @@ class DetectionValidator(BaseValidator):
                     on_plot=self.on_plot,
                 )
 
+    def callback_nb(self, arg):
+        print("here is nb detected in callback", self.nb_detections)
+        print("here is nb labels", self.nb_labels)
+        print("here is nb fp", self.num_fp)
+        print("here is nb fn", self.num_fn)
+        print("tota detected -fp=", self.nb_detections - self.num_fp)
+        print("tota detected -fp+fn=", self.nb_detections - self.num_fp + self.num_fn)
+        print(arg)
+
     def output_bad_cases(self, detections, labels, batch, si):
         """Out the images with overkill and underkill result
         Args:
@@ -281,7 +291,7 @@ class DetectionValidator(BaseValidator):
         detection_classes = detections[:, 5].int()
         self.nb_detections += len(detection_classes)
         self.nb_labels += len(labels)
-        print("detections nb and labels nb:", self.nb_detections, self.nb_labels)
+        # print("detections nb and labels nb:", self.nb_detections, self.nb_labels)
         iou = box_iou(labels[:, 1:], detections[:, :4])
 
         boxes = torch.cat(
@@ -326,10 +336,7 @@ class DetectionValidator(BaseValidator):
         if false_negative.shape[0] > 0:
             # plot false negative images
             # In false negative part, show all correct detections, then append the false negative box from label
-            print("FALSE NEGATIVE", false_negative)
-
             fn_labels = labels[false_negative].cpu()
-            print("fn labels", fn_labels)
             correct_labels = labels[
                 [i for i in range(labels.shape[0]) if i not in false_negative]
             ].cpu()
@@ -360,7 +367,6 @@ class DetectionValidator(BaseValidator):
             num_underkill = fn_labels.shape[0]
             self.num_fn += num_underkill
             file = os.path.split(file_name)[1]
-            print("num", num_underkill, self.num_fn, file)
 
             label_color_list = [colors.GREEN_COLOR] * correct_labels.shape[0] + [
                 colors.RED_COLOR
@@ -388,7 +394,6 @@ class DetectionValidator(BaseValidator):
             # plot false positive images
             # In false positive mode, will show all detection result on images,
             # then mark the false positive part with red
-            print("FALSE POSITIVE", false_positive)
 
             detection_boxes = boxes
             label_boxes = torch.cat(
@@ -406,13 +411,11 @@ class DetectionValidator(BaseValidator):
                     colors.RED_COLOR
                 )  # Replace the false positive part with red color
                 fp_labels = detection_boxes[i]
-                print("fp labels", fp_labels)
 
             file_name = batch["im_file"][si]
 
             num_overkill = len(false_positive)
             self.num_fp += num_overkill
-            print("num false positive HERE", num_overkill, self.num_fp)
             combined_img = self._generate_combined_img(
                 detection_boxes,
                 detection_color_list,
