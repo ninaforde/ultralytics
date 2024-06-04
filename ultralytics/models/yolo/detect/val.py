@@ -119,7 +119,21 @@ class DetectionValidator(BaseValidator):
         )
 
     def postprocess(self, preds):
+        # print("here", len(preds))
+        """
+        pred = ops.mask_spirit(
+            preds,
+            self.args.conf,
+            self.args.iou,
+            labels=self.lb,
+            multi_label=True,
+            agnostic=self.args.single_cls,
+            max_det=self.args.max_det,
+        )
+        print("here 2", len(pred))
+        """
         """Apply Non-maximum suppression to prediction outputs."""
+
         return ops.non_max_suppression(
             preds,
             self.args.conf,
@@ -137,6 +151,7 @@ class DetectionValidator(BaseValidator):
         bbox = batch["bboxes"][idx]
         ori_shape = batch["ori_shape"][si]
         imgsz = batch["img"].shape[2:]
+        # print("imgsz", imgsz)
         ratio_pad = batch["ratio_pad"][si]
         if len(cls):
             bbox = (

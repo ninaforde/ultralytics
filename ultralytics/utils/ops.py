@@ -179,36 +179,6 @@ def mask_spirit(
     max_wh=7680,
     rotated=False,
 ):
-    """
-    Perform non-maximum suppression (NMS) on a set of boxes, with support for masks and multiple labels per box.
-
-    Args:
-        prediction (torch.Tensor): A tensor of shape (batch_size, num_classes + 4 + num_masks, num_boxes)
-            containing the predicted boxes, classes, and masks. The tensor should be in the format
-            output by a model, such as YOLO.
-        conf_thres (float): The confidence threshold below which boxes will be filtered out.
-            Valid values are between 0.0 and 1.0.
-        iou_thres (float): The IoU threshold below which boxes will be filtered out during NMS.
-            Valid values are between 0.0 and 1.0.
-        classes (List[int]): A list of class indices to consider. If None, all classes will be considered.
-        agnostic (bool): If True, the model is agnostic to the number of classes, and all
-            classes will be considered as one.
-        multi_label (bool): If True, each box may have multiple labels.
-        labels (List[List[Union[int, float, torch.Tensor]]]): A list of lists, where each inner
-            list contains the apriori labels for a given image. The list should be in the format
-            output by a dataloader, with each label being a tuple of (class_index, x1, y1, x2, y2).
-        max_det (int): The maximum number of boxes to keep after NMS.
-        nc (int, optional): The number of classes output by the model. Any indices after this will be considered masks.
-        max_time_img (float): The maximum time (seconds) for processing one image.
-        max_nms (int): The maximum number of boxes into torchvision.ops.nms().
-        max_wh (int): The maximum box width and height in pixels
-
-    Returns:
-        (List[torch.Tensor]): A list of length batch_size, where each element is a tensor of
-            shape (num_boxes, 6 + num_masks) containing the kept boxes, with columns
-            (x1, y1, x2, y2, confidence, class, mask1, mask2, ...).
-    """
-
     # Checks
     assert (
         0 <= conf_thres <= 1
@@ -221,16 +191,90 @@ def mask_spirit(
     ):  # YOLOv8 model in validation model, output = (inference_out, loss_out)
         prediction = prediction[0]  # select only inference output
 
+    reference_box = torch.tensor(
+        [201.25, 247.55555555555554, 635.4166666666667, 480.0], device=prediction.device
+    )
+    reference_box = torch.tensor(
+        [680.8940, 452.0788, 270.3532, 46.9850],
+        device=prediction.device,
+    )
+
+    bs = prediction.shape[0]  # batch size
+    nc = prediction.shape[1] - 4  # number of classes
+    mi = 4 + nc  # mask start index
+    xc = prediction[:, 4:mi].amax(1) > conf_thres  # candidates
+    print("shape xc", xc.shape, xc[0])
+    num_boxes = prediction.shape[2]
+
+    # Extraire les coordonnées des boîtes prédites
+    prediction = prediction.transpose(-1, -2)
+    boxes = prediction[..., :4]
+    print("boxes shape", boxes.shape, boxes)
+    from .metrics import bbox_iou
+
+    for i, box in enumerate(boxes):
+        print("box here", box.shape, box, reference_box)
+        condition1 = box[:, 3] < 480
+        condition2 = box[:, 3] > 100
+
+        down = condition1 & condition2
+        print("down", down, down.shape, down.unsqueeze(1).shape, box[:, 3])
+        iou = bbox_iou(reference_box, box, xywh=False)
+        print("a shape", iou.shape, iou, iou[0])
+        xc = iou < 0.2
+        num_false = torch.sum(xc == False).item()
+        num_zero = torch.sum(iou >= 0.2).item()
+        print("num false", num_false, num_zero, xc.shape, xc[0])
+        print("pred shape", prediction[i:].shape)
+        down = down.unsqueeze(0).unsqueeze(2).expand_as(prediction)
+
+        prediction = prediction * down
+        print("pred shape", prediction[i:].shape)
+
+    # Calculer l'IoU entre chaque boîte prédite et la boîte de référence
+    iou = [bbox_iou(box, reference_box, xywh=False) for box in boxes]
+
+    # Filtrer les prédictions en fonction du seuil d'IoU
+    # xc = iou < iou_thres
+
+    print("xcccccccccccc", xc)
+
+    print("heyyy", bs, nc, mi, num_boxes)
+    print("heyyy", prediction[:, 4:mi])
+    # Obtain the box coordinates (assume they are just after the classes)
+    box_coordinates = prediction[..., :4]
+    print("box_coordinates shape:", box_coordinates.shape)
+    print("box_coordinates[0]:", box_coordinates[0])
+
+    # Function to calculate the mask of boxes with IoU < 0.9
+    def iou_filter(box_coords, ref_box):
+        iou_values = bbox_iou(ref_box, box_coords, xywh=False)
+        print("iou_values shape:", iou_values.shape)
+        iou_mask = iou_values < 0.9
+        print("iou_mask shape:", iou_mask.shape)
+        return iou_mask
+
+    # Create a boolean mask for boxes with IoU with the reference box < 0.9
+    valid_iou_mask = iou_filter(box_coordinates, reference_box)
+    print("valid_iou_mask shape:", valid_iou_mask.shape)
+    print("valid_iou_mask:", valid_iou_mask)
+
+    valid_iou_mask = valid_iou_mask.squeeze(-1)
+    print("squeezed valid_iou_mask shape:", valid_iou_mask.shape)
+    print("squeezed valid_iou_mask:", valid_iou_mask)
+
+    # Apply the IoU mask to filter predictions
+    filtered_boxes = box_coordinates[valid_iou_mask]
+    print("filtered_boxes shape:", filtered_boxes.shape)
+    print("filtered_boxes:", filtered_boxes)
+
+    return filtered_boxes
+    '''
     bs = prediction.shape[0]  # batch size
     nc = nc or (prediction.shape[1] - 4)  # number of classes
     nm = prediction.shape[1] - nc - 4
     mi = 4 + nc  # mask start index
     xc = prediction[:, 4:mi].amax(1) > conf_thres  # candidates
-
-    # Settings
-    # min_wh = 2  # (pixels) minimum box width and height
-    time_limit = 2.0 + max_time_img * bs  # seconds to quit after
-    multi_label &= nc > 1  # multiple labels per box (adds 0.5ms/img)
 
     prediction = prediction.transpose(-1, -2)  # shape(1,84,6300) to shape(1,6300,84)
     if not rotated:
@@ -281,32 +325,45 @@ def mask_spirit(
         # Batched NMS
         c = x[:, 5:6] * (0 if agnostic else max_wh)  # classes
         scores = x[:, 4]  # scores
+        # bbox_to_remove = torch.tensor([483, 557, 1525, 1080], device=x.device)
+        bbox_to_remove = torch.tensor(
+            [201.25, 247.55555555555554, 635.4166666666667, 480.0], device=x.device
+        )
+        from .metrics import bbox_iou
         if rotated:
             boxes = torch.cat((x[:, :2] + c, x[:, 2:4], x[:, -1:]), dim=-1)  # xywhr
             i = nms_rotated(boxes, scores, iou_thres)
         else:
             boxes = x[:, :4] + c  # boxes (offset by class)
+            list_index = []
+            """
+            for i, bbox in enumerate(boxes):
+                bbox = boxes[i]
+                bbox_to_remove = bbox_to_remove
+                before = boxes.shape
+
+                if bbox_iou(bbox_to_remove, bbox - c[i], xywh=False) >= 0.99:
+                    print(
+                        "CONDITIONNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN true",
+                        bbox,
+                        bbox_iou(bbox_to_remove, bbox - c[i], xywh=False),
+                        flush=True,
+                    )
+                else:
+                    list_index.append(i)
+
+            boxes = boxes[list_index]
+            scores = scores[list_index]
+            """
+            # print("before and after", before, boxes.shape)
             i = torchvision.ops.nms(boxes, scores, iou_thres)  # NMS
         i = i[:max_det]  # limit detections
 
-        # # Experimental
-        # merge = False  # use merge-NMS
-        # if merge and (1 < n < 3E3):  # Merge NMS (boxes merged using weighted mean)
-        #     # Update boxes as boxes(i,4) = weights(i,n) * boxes(n,4)
-        #     from .metrics import box_iou
-        #     iou = box_iou(boxes[i], boxes) > iou_thres  # iou matrix
-        #     weights = iou * scores[None]  # box weights
-        #     x[i, :4] = torch.mm(weights, x[:, :4]).float() / weights.sum(1, keepdim=True)  # merged boxes
-        #     redundant = True  # require redundant detections
-        #     if redundant:
-        #         i = i[iou.sum(1) > 1]  # require redundancy
-
         output[xi] = x[i]
-        if (time.time() - t) > time_limit:
-            LOGGER.warning(f"WARNING ⚠️ NMS time limit {time_limit:.3f}s exceeded")
-            break  # time limit exceeded
+
 
     return output
+    '''
 
 
 def non_max_suppression(
@@ -368,7 +425,7 @@ def non_max_suppression(
 
     bs = prediction.shape[0]  # batch size
     nc = nc or (prediction.shape[1] - 4)  # number of classes
-    nm = prediction.shape[1] - nc - 4
+    nm = prediction.shape[1] - nc - 4  # number of masks
     mi = 4 + nc  # mask start index
     xc = prediction[:, 4:mi].amax(1) > conf_thres  # candidates
 
